@@ -1,0 +1,6 @@
+1. When using the Rainbow CSV "align" feature in VSCode, the formatting script can fail.
+   Do not align any data that needs to be processed
+   
+2. When running "setup.sh", you need to source it (source .setup/setup.sh)
+
+3. Run all scripts ("download", "format", "train", "test") inside of their directories, do not run them outside of their directories or they will fail

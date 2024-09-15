@@ -1,0 +1,16 @@
+conda create -n stocks
+conda activate stocks
+conda install pytorch -c pytorch-nightly
+conda install anaconda::pandas -y
+conda install pytz -y
+conda install scikit-learn -y
+conda install requests -y
+conda install onnx -y
+conda install pip -y
+conda install flask -y
+pip install --upgrade tiingo
+pip install --upgrade onnxscript
+pip install --upgrade yfinance
+pip install --upgrade ollama
+conda clean -a -y
+clear

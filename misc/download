@@ -1,0 +1,49 @@
+#!/usr/bin/env python
+# This script runs and obtains data live from the market and
+# saves it in multiple CSV files
+from datetime import datetime
+import subprocess
+import pytz
+import os
+
+import modules.internet as internet
+
+# Open/Close times on NYSE
+	# Open: 9:30 AM [EST]
+	# Close: 4:00 PM [EST]
+
+# Main logic
+print('Waiting for market close...')
+while True:
+	try:
+		# Start if market has been closed for an hour (since we want todays data as well)
+		if datetime.now(pytz.timezone('US/Eastern')).hour < 9 or datetime.now(pytz.timezone('US/Eastern')).hour >= 16:
+			break
+
+		# Print the current time for the NYSE
+		print(f' NYSE - {abs(datetime.now(pytz.timezone('US/Eastern')).hour - 12)}:{datetime.now(pytz.timezone('US/Eastern')).minute} (Close: 4:00)',end='\r')
+	except KeyboardInterrupt:
+		subprocess.call('clear', shell=True)
+		exit(0)
+
+subprocess.call('clear', shell=True)
+
+# Set up Tiingo client
+client = internet.TiingoClient()
+
+
+# Delete old data
+for dir in [f'stockdata/{client.ticker}']:
+	try:
+		files = os.listdir(dir)
+		for file in files:
+			file_path = os.path.join(dir, file)
+			if os.path.isfile(file_path):
+				os.remove(file_path)
+	except OSError as e:
+		print('OSError:',e)
+		exit(1)
+
+# Obtain market data (historical)
+client.get_historical_data(save=False)
+subprocess.call('clear',shell=True)
