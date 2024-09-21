@@ -18,7 +18,7 @@ def is_weekend(date):
 		day_of_week = (date.weekday() + 1) % 7  # Convert Sunday from 6 to 0
 			
 		# Determine if it's a weekday or a weekend
-		if day_of_week < 5:
+		if 0 < day_of_week <= 5:
 			return False
 		else:
 			return True
@@ -47,10 +47,6 @@ def daily_protocall():
 	'''
 	Collects data on the specified ticker and analyzes it
 	'''
-
-	# If there was a previous attempt, check if it is too early to attempt again
-	if str(date.today()) == config['LAST_PROTOCALL_UPDATE']:
-		return False
 
 	# Get the daily market data
 	df = tiingo_client.get_daily_market_data()
@@ -102,9 +98,10 @@ Article below:
 
 	# Save the dataframe as a file
 	historical_data.to_pickle(f'stockdata/{config['TICKER']}/{config['TICKER']}.pkl')
+	historical_data.to_csv(f'stockdata/{config['TICKER']}/{config['TICKER']}.csv', index=False)
 
 	# Save last update time in config
-	with open('config.json') as f:
+	with open('config.json', 'w') as f:
 		config['LAST_PROTOCALL_UPDATE'] = str(date.today())
 
 		json.dump(config, f, indent=4)
@@ -114,22 +111,26 @@ Article below:
 # Main logic
 def main():
 	try:
-		while True:
-			# Start if market has been closed for an hour (since we want todays data as well)
-			while not (datetime.now(pytz.timezone('US/Eastern')).hour < 9 or \
-				(datetime.now(pytz.timezone('US/Eastern')).hour >= 17)):
-					pass
+		# Start if market has been closed for an hour (since we want todays data as well)
+		while not (datetime.now(pytz.timezone('US/Eastern')).hour < 9 or \
+			(datetime.now(pytz.timezone('US/Eastern')).hour >= 17)):
+				pass
 
-			# If today is a weekend, do not run
-			if is_weekend(date.today()):
-				protocall_complete = daily_protocall()
+		# If today is a weekend, do not run
+		# Also, if there was a previous attempt, check if it is too early to attempt again
+		if not is_weekend(date.today()) and str(date.today()) != config['LAST_PROTOCALL_UPDATE']:
+			protocall_complete = daily_protocall()
 
-				if protocall_complete:
-					logger.warning(f'{str(date.today())} @ {datetime.hour}:{datetime.minute} - Protocall COMPLETED')
-				else:
-					logger.error(f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - Protocall FAILED')
-					time.sleep(1 * 3600) # Sleep an hour and try again
+			if protocall_complete:
+				logger.warning(f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - Protocall COMPLETED')
+			else:
+				logger.error(f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - Protocall FAILED')
+				time.sleep(1 * 3600) # Sleep an hour and try again
 	except KeyboardInterrupt:
 		return 1
-	
-main()
+
+while True:
+	result = main()
+
+	if result == 1:
+		break
