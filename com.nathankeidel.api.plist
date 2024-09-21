@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nathankeidel.api</string>
+
+	<key>RunAtLoad</key>
+    <true/>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/miniconda3/envs/stocks/bin/python</string>
+		<string>database.py</string>
+    </array>
+
+	<key>WorkingDirectory</key>
+	<string>/Users/nathankeidel/Library/Mobile Documents/com~apple~CloudDocs/stocks</string>
+	
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>
