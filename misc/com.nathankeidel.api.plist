@@ -11,7 +11,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/opt/miniconda3/envs/stocks/bin/python</string>
-		<string>database.py</string>
+		<string>app.py</string>
     </array>
 
 	<key>WorkingDirectory</key>
