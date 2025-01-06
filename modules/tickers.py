@@ -16,5 +16,5 @@ url = 'https://www.ssga.com/us/en/intermediary/etfs/library-content/products/fun
 holdings = read_excel(url, engine='openpyxl', skiprows=4).dropna()['Ticker']
 
 for ticker in holdings:
-	if ticker != 'CASH_USD':
+	if ticker != 'CASH_USD' or ticker != '-':
 		TICKERS.append(ticker)
