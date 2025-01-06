@@ -11,6 +11,50 @@ import os
 
 from datetime import date, datetime, timezone
 
+class YahooClient:
+	'''
+	# YahooClient
+	Uses the `yfinance` library to get market data for a stock trading AI
+	'''
+	def __init__(self):
+		with open('config.json') as f:
+			config = json.load(f)
+
+	def current(self, ticker: str):
+		'''
+		Returns daily valuation metrics of a stock
+		'''
+		# Create a `yfinance.Ticker` object for the desired company
+		yf_ticker = yf.Ticker(ticker)
+
+		# Get info about the company
+		info = yf_ticker.info
+
+		# Combine valuation metrics into a dataframe
+		try:
+			data = {'date': [str(date.today())],
+				'open': [info['open']],
+				'high': [info['dayHigh']],
+				'low': [info['dayLow']],
+				'close': [info['previousClose']],
+				'volume': [info['volume']],
+				'trailingEps': [info['trailingEps']],
+				'forwardEps': [info['forwardEps']],
+				'trailingPE': [info['trailingPE']],
+				'forwardPE': [info['forwardPE']],
+				'priceToBook': [info['priceToBook']],
+				'marketCap': [info['marketCap']],
+				'dividendYield': [info['dividendYield']],
+				'fiftyDayAverage': [info['fiftyDayAverage']],
+				'twoHundredDayAverage': [info['twoHundredDayAverage']]
+			}
+		except KeyError:
+			# Key error will usually mean the user did not enter the ticker name corectly
+			# Return `None`
+			return
+
+		return pd.DataFrame(data)
+
 class TiingoClient:
 	'''
 	# TiingoClient
@@ -20,12 +64,11 @@ class TiingoClient:
 		with open('config.json') as f:
 			config = json.load(f)
 
-		self.ticker = config['TICKER']
 		self.tiingo_key = config['TIINGO_KEY']
 
 		self.client = tiingo.TiingoClient({'session':True,'api_key':self.tiingo_key})
 
-	def get_historical_data(self, save=True):
+	def historical(self, ticker: str):
 		'''
 		Return historical data from a specific stock
 		'''
@@ -36,47 +79,32 @@ class TiingoClient:
 		}
 
 		# Collect price data
-		data_ohlcv = self.client.get_ticker_price(self.ticker,
+		data_ohlcv = self.client.get_ticker_price(ticker,
 			fmt='csv',
 			startDate='2000-01-01',
 			frequency='daily')
 		
 		# Collect valuation data
-		data_pe_pb = self.client.get_fundamentals_daily(self.ticker,
+		data_pe_pb = self.client.get_fundamentals_daily(ticker,
 			fmt='csv',
 			startDate='2000-01-01')
 
 		# Save the collected price data to a CSV file
-		with open(f'{self.ticker}-OHLCV.csv', 'w') as f:
+		with open(f'{ticker}-OHLCV.csv', 'w') as f:
 			for data in data_ohlcv:
 				lines = data
 				for line in lines:
 					f.write(line)
 	
 		# Save the collected data to a CSV file
-		with open(f'{self.ticker}-PEPB.csv', 'w') as f:
+		with open(f'{ticker}-PEPB.csv', 'w') as f:
 			for data in data_pe_pb:
 				lines = data
 				for line in lines:
 					f.write(line)
 
-		# Open the CSV files as pandas dataframes
-		data_ohlcv = pd.read_csv(f'{self.ticker}-OHLCV.csv')
-		data_pe_pb = pd.read_csv(f'{self.ticker}-PEPB.csv')
 
-		# Delete the CSV files if the user wants to
-		if save:
-			try:
-				os.remove(f'{self.ticker}-OHLCV.csv')
-				os.remove(f'{self.ticker}-PEPB.csv')
-			except OSError:
-				pass
-		else:
-			# Return the pandas dataframes
-			return data_ohlcv, data_pe_pb
-
-
-	def get_daily_market_data(self):
+	def current(self, ticker: str):
 		'''
 		Gets specific data for a stock after the end of a market day
 		'''
@@ -86,36 +114,36 @@ class TiingoClient:
 		}
 
 		# Get daily market data
-		data_ohlcv = self.client.get_ticker_price(self.ticker,
+		data_ohlcv = self.client.get_ticker_price(ticker,
 			fmt='csv',
 			startDate=str(date.today()),
 			frequency='daily')
 		
-		data_pe_pb = self.client.get_fundamentals_daily(self.ticker,
+		data_pe_pb = self.client.get_fundamentals_daily(ticker,
 			fmt='csv',
 			startDate=str(date.today()))
 	
 		# Save the collected data to a CSV file
-		with open(f'{self.ticker}-PEPB-{date.today()}.csv', 'w') as f:
+		with open(f'{ticker}-PEPB-{date.today()}.csv', 'w') as f:
 			# Data goes in order: [date, close, high, low, open, volume]
 			for data in data_pe_pb:
 				for line in data:
 					f.write(line)
 
-		with open(f'{self.ticker}-OHLCV-{date.today()}.csv', 'w') as f:
+		with open(f'{ticker}-OHLCV-{date.today()}.csv', 'w') as f:
 			# Data goes in order: [date, close, high, low, open, volume]
 			for data in data_ohlcv:
 				for line in data:
 					f.write(line)
 
 		# Open the CSV files as pandas dataframes
-		daily_data_ohlcv = pd.read_csv(f'{self.ticker}-OHLCV-{date.today()}.csv')
-		daily_data_pe_pb = pd.read_csv(f'{self.ticker}-PEPB-{date.today()}.csv')
+		daily_data_ohlcv = pd.read_csv(f'{ticker}-OHLCV-{date.today()}.csv')
+		daily_data_pe_pb = pd.read_csv(f'{ticker}-PEPB-{date.today()}.csv')
 
 		# Delete the CSV files
 		try:
-			os.remove(f'{self.ticker}-OHLCV-{date.today()}.csv')
-			os.remove(f'{self.ticker}-PEPB-{date.today()}.csv')
+			os.remove(f'{ticker}-OHLCV-{date.today()}.csv')
+			os.remove(f'{ticker}-PEPB-{date.today()}.csv')
 		except OSError:
 			pass
 
@@ -123,17 +151,17 @@ class TiingoClient:
 		try:
 			df = pd.merge(daily_data_ohlcv, daily_data_pe_pb, on='date')
 		except KeyError:
-			return None
+			return
 
 		# Convert the given dates to python "datetime" objects
 		df['date'] = pd.to_datetime(df['date'],utc=True).dt.date
 
 		# Remove values that are not important
-		df = df.drop(['marketCap','adjClose','adjHigh','adjLow','adjOpen','adjVolume','divCash','splitFactor'],
+		df = df.drop(['adjClose','adjHigh','adjLow','adjOpen','adjVolume','divCash','splitFactor'],
 			axis=1
 		)
 
-		# Return the pandas dataframes
+		# Return the pandas dataframe
 		return df
 
 class NewsWebScraper:
@@ -142,19 +170,14 @@ class NewsWebScraper:
 
 	Class used to get the content of news webpages provided by `yfinance`
 	'''
-	def __init__(self):
-		# Load config
-		with open('config.json') as f:
-			config = json.load(f)
-
-		# Store the yfinance ticker object
-		self.yf_ticker = yf.Ticker(config['TICKER'])
-
-	def scrape_from_yf(self):
+	def scrape_from_yf(self, ticker: str):
 		'''
 		Scrapes websites provided by `yfinance` and returns a list of 
 		`NewsWebPage` objects
 		'''
+
+		# Create a `yf.Ticker` object
+		yf_ticker = yf.Ticker(ticker)
 
 		# Make a list to store each scraped site
 		scraped_sites = []
@@ -165,40 +188,45 @@ class NewsWebScraper:
 		}
 
 		# Fetch historical news
-		news_data = self.yf_ticker.get_news()
+		news_data = pd.DataFrame.from_dict(yf_ticker.news)[['title','publisher','providerPublishTime','link']]
 
 		# Get the html content of each webpage
-		for news in news_data:
+		for i in range(len(news_data)):
+
 			# Fetch the website data
-			news_content = requests.get(news['link'],
+			data = requests.get(news_data['link'][i],
 				allow_redirects=True,
 				headers=headers
 			)
 
-			if news_content.status_code != 200:
-				return None
-			
-			# Get the HTML content
-			news_content = news_content.text
+			# Verfiy that the site was cleanly retreived
+			if data.status_code == 200:
+				
+				# Get the HTML content
+				data = data.text
 
-			# Parse the HTML content
-			soup = BeautifulSoup(news_content, 'html.parser')
+				# Parse the HTML content
+				soup = BeautifulSoup(data, 'html.parser')
 
-			# Extract class "caas-body" from "<div>"
-			news_content = soup.find('div', class_='caas-body').text
-			
-			scraped_sites.append(
-				NewsWebPage(
-					news['title'],
-					news['publisher'],
-					news['providerPublishTime'],
-					news_content,
-					news['link']
-				)
-			)
+				# Attempt 1: Extract data from "<p>" tag
+				# NOTE: 'yf-1pe5jgt' is a class where most text can be found on some articles
+				news_content = ''
+				for content in soup.find_all('p'):
+					news_content += (content.text + ' ')
 
-			# Return the scraped sites as "NewsWebPage" object
-			return scraped_sites
+				if len(news_content) != 0 or news_content is not None:
+					scraped_sites.append(
+						NewsWebPage(
+							news_data['title'][i],
+							news_data['publisher'][i],
+							news_data['providerPublishTime'][i],
+							news_content,
+							news_data['link'][i]
+						)
+					)
+
+		# Return the scraped sites as "NewsWebPage" object
+		return scraped_sites
 
 class NewsWebPage:
 		'''
