@@ -4,3 +4,5 @@
 2. When running "setup.sh", you need to source it (source .setup/setup.sh)
 
 3. Run all scripts ("download", "format", "train", "test") inside of their directories, do not run them outside of their directories or they will fail
+
+4. yfinance version 0.2.51 destroyed functionality for obtaining news from a yf.Ticker() object. Possibly fix this later?
