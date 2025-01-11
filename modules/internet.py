@@ -1,5 +1,3 @@
-import tiingo
-
 import pandas as pd
 
 import requests
