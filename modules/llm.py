@@ -29,14 +29,14 @@ class LlamaChat:
 	# LlamaChat
 	Used to access and talk to ollama LLM's in python
 	'''
-	def __init__(self, model: str = 'llama3.1:70b', prompting: bool = False):
+	def __init__(self, model: str = 'llama3.3:70b', prompting: bool = False):
 		# Create a boolean to enable/disable llama prompting
 		self.prompting = prompting
 
 		models = []
 		try:
 			for ollama_model in ollama.list()['models']:
-				models.append(ollama_model['name'])
+				models.append(ollama_model.model)
 		except ConnectError:
 			print('Error connecting to ollama servers')
 			exit(1)
