@@ -176,8 +176,8 @@ class NewsWebScraper:
 		`NewsWebPage` objects
 		'''
 
-		# Create a `yf.Ticker` object
-		yf_ticker = yf.Ticker(ticker)
+		# Search the news on yfinance
+		yf_news = yf.Search(ticker, news_count=10).news
 
 		# Make a list to store each scraped site
 		scraped_sites = []
@@ -188,7 +188,7 @@ class NewsWebScraper:
 		}
 
 		# Fetch historical news
-		news_data = pd.DataFrame.from_dict(yf_ticker.news)[['title','publisher','providerPublishTime','link']]
+		news_data = pd.DataFrame.from_dict(yf_news)[['title','publisher','providerPublishTime','link']]
 
 		# Get the html content of each webpage
 		for i in range(len(news_data)):
