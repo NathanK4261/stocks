@@ -2,25 +2,25 @@ from modules.internet import YahooClient, NewsWebScraper
 from modules.llm import LlamaChat
 
 import modules.tickers
+from yfinance import Ticker
 
 from datetime import datetime, date
 import time
 import pytz
 
 import pandas as pd
-
 from statistics import mean
 
 import json
 import logging
 
-def is_weekend(date):
+def is_weekend():
 	'''
 	Returns true if the current day is a weekend
 	'''
 	try: 
 		# Monday is 1 and Sunday is 7
-		day_of_week = (date.weekday() + 1) % 7  # Convert Sunday from 6 to 0
+		day_of_week = (date.today().weekday() + 1) % 7  # Convert Sunday from 6 to 0
 			
 		# Determine if it's a weekday or a weekend
 		if 0 < day_of_week <= 5:
@@ -30,6 +30,15 @@ def is_weekend(date):
 			
 	except ValueError as e:
 		print(f"Error: {e}")
+
+def is_market_open():
+	ticker = Ticker('^GSPC')
+	hist = ticker.history(period='1d')
+
+	if not hist.empty:
+		return True
+	else:
+		return False
 
 # Create a logger
 logger = logging.getLogger(__name__)
@@ -55,6 +64,7 @@ def daily_protocall():
 
 	# Iterate through every ticker in the S&P 500
 	for ticker in modules.tickers.TICKERS:
+		logger.warning(f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - PULL: {ticker}')
 
 		# Get the daily market data
 		current_data = yahoo_client.current(ticker)
@@ -98,7 +108,7 @@ def daily_protocall():
 			try:
 				sentiments.append(int(llama.prompt(sentiment_prompt)))
 			except ValueError:
-				pass
+				logger.warning(f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - Value Error while analyzing news for: {ticker}')
 
 		# Get the average sentiment of the stock for today
 		avg_sentiment = mean(sentiments)
@@ -141,7 +151,7 @@ def main():
 
 		# If today is a weekend, do not run
 		# Also, if there was a previous attempt, check if it is too early to attempt again
-		if not is_weekend(date.today()) and str(date.today()) != config['LAST_PROTOCALL_UPDATE']:
+		if not is_weekend() and str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and is_market_open():
 			protocall_complete = daily_protocall()
 
 			if protocall_complete:
