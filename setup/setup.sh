@@ -11,7 +11,6 @@ conda install requests -y
 conda install onnx -y
 conda install pip -y
 conda install flask -y
-pip install --upgrade tiingo
 pip install --upgrade onnxscript
 pip install --upgrade yfinance
 pip install --upgrade ollama
