@@ -9,6 +9,13 @@ import os
 
 from datetime import date, datetime, timezone
 
+def error_message(message: str, error: Exception):
+	'''
+	Returns a formatted string that can be used to log errors correctly
+	'''
+	
+	return f'[internet.py]: {message} *** {str(error)} -> [Line: {error.__traceback__.tb_lineno}]'
+
 class YahooClient:
 	'''
 	# YahooClient
@@ -26,7 +33,12 @@ class YahooClient:
 		yf_ticker = yf.Ticker(ticker)
 
 		# Get info about the company
-		info = yf_ticker.info
+		try:
+			info = yf_ticker.info
+		except Exception as e:
+			return (1,
+				error_message(f'Could not pull data for [{ticker.upper()}]',e)
+			)
 
 		# Combine valuation metrics into a dataframe
 		try:
@@ -46,12 +58,13 @@ class YahooClient:
 				'fiftyDayAverage': [info['fiftyDayAverage']],
 				'twoHundredDayAverage': [info['twoHundredDayAverage']]
 			}
-		except KeyError:
+		except KeyError as e:
 			# Key error will usually mean the user did not enter the ticker name corectly
-			# Return `None`
-			return
+			return (1,
+				error_message(f'Unable to create price DataFrame for [{ticker.upper()}]', e)
+			)
 
-		return pd.DataFrame(data)
+		return (0, pd.DataFrame(data))
 
 class NewsWebScraper:
 	'''
@@ -66,7 +79,12 @@ class NewsWebScraper:
 		'''
 
 		# Search the news on yfinance
-		yf_news = yf.Search(ticker, news_count=10).news
+		try:
+			yf_news = yf.Search(ticker, news_count=10).news
+		except Exception as e:
+			return (1,
+				error_message(f'Could not pull news data for [{ticker.upper()}]', e)
+			)
 
 		# Make a list to store each scraped site
 		scraped_sites = []
@@ -77,16 +95,26 @@ class NewsWebScraper:
 		}
 
 		# Fetch historical news
-		news_data = pd.DataFrame.from_dict(yf_news)[['title','publisher','providerPublishTime','link']]
+		try:
+			news_data = pd.DataFrame.from_dict(yf_news)[['title','publisher','providerPublishTime','link']]
+		except Exception as e:
+			return (1,
+				error_message('Could not create DataFrame from news source', e)
+			)
 
 		# Get the html content of each webpage
 		for i in range(len(news_data)):
 
 			# Fetch the website data
-			data = requests.get(news_data['link'][i],
-				allow_redirects=True,
-				headers=headers
-			)
+			try:
+				data = requests.get(news_data['link'][i],
+					allow_redirects=True,
+					headers=headers
+				)
+			except:
+				# No need to return error if site was unable to be reached, only
+				# return error if no data was able to be pulled at all
+				pass
 
 			# Verfiy that the site was cleanly retreived
 			if data.status_code == 200:
@@ -103,6 +131,8 @@ class NewsWebScraper:
 				for content in soup.find_all('p'):
 					news_content += (content.text + ' ')
 
+				# If the data scraped from the site is not empty, create a
+				# "NewsWebPage" object and store the site information
 				if len(news_content) != 0 or news_content is not None:
 					scraped_sites.append(
 						NewsWebPage(
@@ -114,8 +144,13 @@ class NewsWebScraper:
 						)
 					)
 
-		# Return the scraped sites as "NewsWebPage" object
-		return scraped_sites
+		# Return the scraped sites only if there are enough "NewsWabPage" objects
+		if len(scraped_sites) == 0:
+			return (1, 
+				error_message(f'Could not pull sufficient news data for [{ticker.uper()}]', e)
+			)
+		
+		return (0, scraped_sites)
 
 class NewsWebPage:
 		'''
