@@ -9,12 +9,12 @@ import os
 
 from datetime import date, datetime, timezone
 
-def error_message(message: str, error: Exception):
+def error_message(file: str, message: str, error: Exception):
 	'''
 	Returns a formatted string that can be used to log errors correctly
 	'''
 	
-	return f'[internet.py]: {message} *** {str(error)} -> [Line: {error.__traceback__.tb_lineno}]'
+	return f'[{file}]: {message} *** {str(error)} -> [Line: {error.__traceback__.tb_lineno}]'
 
 class YahooClient:
 	'''
@@ -37,7 +37,7 @@ class YahooClient:
 			info = yf_ticker.info
 		except Exception as e:
 			return (1,
-				error_message(f'Could not pull data for [{ticker.upper()}]',e)
+				error_message('internet.py', f'Could not pull data for [{ticker.upper()}]',e)
 			)
 
 		# Combine valuation metrics into a dataframe
@@ -61,7 +61,7 @@ class YahooClient:
 		except KeyError as e:
 			# Key error will usually mean the user did not enter the ticker name corectly
 			return (1,
-				error_message(f'Unable to create price DataFrame for [{ticker.upper()}]', e)
+				error_message('internet.py', f'Unable to create price DataFrame for [{ticker.upper()}]', e)
 			)
 
 		return (0, pd.DataFrame(data))
@@ -83,7 +83,7 @@ class NewsWebScraper:
 			yf_news = yf.Search(ticker, news_count=10).news
 		except Exception as e:
 			return (1,
-				error_message(f'Could not pull news data for [{ticker.upper()}]', e)
+				error_message('internet.py', f'Could not pull news data for [{ticker.upper()}]', e)
 			)
 
 		# Make a list to store each scraped site
@@ -99,7 +99,7 @@ class NewsWebScraper:
 			news_data = pd.DataFrame.from_dict(yf_news)[['title','publisher','providerPublishTime','link']]
 		except Exception as e:
 			return (1,
-				error_message('Could not create DataFrame from news source', e)
+				error_message('internet.py', 'Could not create DataFrame from news source', e)
 			)
 
 		# Get the html content of each webpage
@@ -147,7 +147,7 @@ class NewsWebScraper:
 		# Return the scraped sites only if there are enough "NewsWabPage" objects
 		if len(scraped_sites) == 0:
 			return (1, 
-				error_message(f'Could not pull sufficient news data for [{ticker.uper()}]', e)
+				error_message('internet.py', f'Could not pull sufficient news data for [{ticker.uper()}]', e)
 			)
 		
 		return (0, scraped_sites)
