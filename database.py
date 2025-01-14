@@ -14,23 +14,6 @@ from statistics import mean
 import json
 import logging
 
-def is_weekend():
-	'''
-	Returns true if the current day is a weekend
-	'''
-	try: 
-		# Monday is 1 and Sunday is 7
-		day_of_week = (date.today().weekday() + 1) % 7  # Convert Sunday from 6 to 0
-			
-		# Determine if it's a weekday or a weekend
-		if 0 < day_of_week <= 5:
-			return False
-		else:
-			return True
-			
-	except ValueError as e:
-		print(f"Error: {e}")
-
 def is_market_open():
 	ticker = Ticker('^GSPC')
 	hist = ticker.history(period='1d')
@@ -39,6 +22,12 @@ def is_market_open():
 		return True
 	else:
 		return False
+	
+def log_msg(message: str):
+	'''
+	Creates an formatted message for the logger
+	'''
+	return (f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - {message}')
 
 # Create a logger
 logger = logging.getLogger(__name__)
@@ -64,18 +53,22 @@ def daily_protocall():
 
 	# Iterate through every ticker in the S&P 500
 	for ticker in modules.tickers.TICKERS:
-		logger.warning(f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - PULL: {ticker}')
+		logger.warning(log_msg(f'PULL: {ticker.upper()}'))
 
 		# Get the daily market data
-		current_data = yahoo_client.current(ticker)
+		result, current_data = yahoo_client.current(ticker)
 
-		if current_data is None:
-			return False # Exit the protocall if there is no data collected
+		if result == 1: # 1 = Error
+			logger.error(log_msg(current_data))
+
+			return False
 
 		# Collect news information
-		scraped_sites = scraper.scrape_from_yf(ticker)
+		result, scraped_sites = scraper.scrape_from_yf(ticker)
 
-		if scraped_sites is None:
+		if result == 1: # 1 = Error
+			logger.error(log_msg(scraped_sites))
+
 			return False
 
 		# Create a variable to store the average sentiment
@@ -108,7 +101,7 @@ def daily_protocall():
 			try:
 				sentiments.append(int(llama.prompt(sentiment_prompt)))
 			except ValueError:
-				logger.warning(f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - Value Error while analyzing news for: {ticker}')
+				logger.warning(log_msg(f'LLM caused value error while analyzing news'))
 
 		# Get the average sentiment of the stock for today
 		avg_sentiment = mean(sentiments)
@@ -139,9 +132,9 @@ def daily_protocall():
 		return True
 
 # Main logic
-def main():
+while True:
 	# Log the bootup time
-	logger.warning(f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - BOOT')
+	logger.warning(log_msg('BOOT'))
 
 	try:
 		# Start only if market has been closed for an hour (since we want todays data as well)
@@ -151,19 +144,13 @@ def main():
 
 		# If today is a weekend, do not run
 		# Also, if there was a previous attempt, check if it is too early to attempt again
-		if not is_weekend() and str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and is_market_open():
+		if str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and is_market_open():
 			protocall_complete = daily_protocall()
 
 			if protocall_complete:
-				logger.warning(f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - Protocall COMPLETED')
+				logger.warning(log_msg('Protocall COMPLETED'))
 			else:
-				logger.error(f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - Protocall FAILED')
+				logger.error(log_msg('Protocall FAILED'))
 				time.sleep(1 * 3600) # Sleep an hour and try again
 	except KeyboardInterrupt:
-		return 1
-
-while True:
-	result = main()
-
-	if result == 1:
 		break
