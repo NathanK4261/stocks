@@ -71,10 +71,10 @@ class MLTools:
 
 # The neural network
 class StockNet(Module):
-	def __init__(self, device):
+	def __init__(self, device, input_size: int):
 		super(StockNet, self).__init__()
 
-		self.lstm = LSTM(input_size=10, hidden_size=50, num_layers=2, batch_first=True, device=device)
+		self.lstm = LSTM(input_size=input_size, hidden_size=50, num_layers=2, batch_first=True, device=device)
 		self.linear = Linear(50, 2, device=device)
 
 	def forward(self, x):
