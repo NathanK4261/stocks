@@ -9,7 +9,7 @@ import time
 import pytz
 
 import pandas as pd
-from statistics import mean
+from statistics import mean, StatisticsError
 
 import json
 import logging
@@ -101,35 +101,49 @@ def daily_protocall():
 			try:
 				sentiments.append(int(llama.prompt(sentiment_prompt)))
 			except ValueError:
-				logger.warning(log_msg(f'LLM caused value error while analyzing news'))
+				#logger.warning(log_msg(f'LLM caused value error while analyzing news'))
+				pass
 
 		# Get the average sentiment of the stock for today
-		avg_sentiment = mean(sentiments)
+		try:
+			avg_sentiment = mean(sentiments)
+		except StatisticsError:
+			logger.error(log_msg(f'Could not obtain average sentiment for {ticker}'))
+			return False
+		except AttributeError:
+			logger.error(log_msg(f'Could not obtain average sentiment for {ticker}'))
+			return False
 
 		# Try and load saved historical data
 		try:
 			historical_data = pd.read_pickle(f'stockdata/{ticker}.pkl')
+
+			# Create a new column to add the market sentiment
+			current_data['sentiment'] = avg_sentiment
+
+			# Add todays data to the historical data
+			historical_data.loc[len(historical_data)] = current_data
 		except:
 			# If no historical data exists, start storing
 			# historical data from today
 			historical_data = current_data
 
-		# Create a new column to add the market sentiment
-		historical_data['sentiment'] = avg_sentiment
+			# Create a new column to add the market sentiment
+			historical_data['sentiment'] = avg_sentiment
 
 		# Save the dataframe as a file
 		historical_data.to_pickle(f'stockdata/{ticker}.pkl')
 
 		# Test option: save to csv to get visual representation
-		historical_data.to_csv(f'stockdata/csv/{ticker}.csv')
+		#historical_data.to_csv(f'stockdata/csv/{ticker}.csv')
 
 	# Save last update time in config
 	with open('config.json', 'w') as f:
 		config['LAST_PROTOCALL_UPDATE'] = str(date.today())
 
 		json.dump(config, f, indent=4)
-
-		return True
+	
+	return True
 
 # Main logic
 while True:
@@ -153,4 +167,5 @@ while True:
 				logger.error(log_msg('Protocall FAILED'))
 				time.sleep(1 * 3600) # Sleep an hour and try again
 	except KeyboardInterrupt:
+		logger.warning(log_msg('KeyboardInterrupt'))
 		break
