@@ -113,7 +113,7 @@ class NewsWebScraper:
 			except:
 				# No need to return error if site was unable to be reached, only
 				# return error if no data was able to be pulled at all
-				pass
+				data = None
 
 			# Verfiy that the site was cleanly retreived
 			if data.status_code == 200:
