@@ -54,7 +54,6 @@ class YahooClient:
 				'forwardPE': [info['forwardPE']],
 				'priceToBook': [info['priceToBook']],
 				'marketCap': [info['marketCap']],
-				'dividendYield': [info['dividendYield']],
 				'fiftyDayAverage': [info['fiftyDayAverage']],
 				'twoHundredDayAverage': [info['twoHundredDayAverage']]
 			}
