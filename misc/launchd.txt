@@ -1,3 +1,0 @@
-plist file located @ "/Library/LaunchAgents"
-
-To activate: "launchctl load /Library/LaunchAgents/com.nathankeidel.stocks.plist"
