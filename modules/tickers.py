@@ -5,7 +5,6 @@ A list containing the ticker symbols of every stock in the S&P 500
 Yes, it does update the list every time...
 '''
 from pandas import read_excel
-from .internet import YahooClient as yc
 
 TICKERS = []
 
