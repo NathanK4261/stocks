@@ -21,10 +21,6 @@ class YahooClient:
 	# YahooClient
 	Uses the `yfinance` library to get market data for a stock trading AI
 	'''
-	def __init__(self):
-		with open('config.json') as f:
-			config = json.load(f)
-
 	def current(self, ticker: str):
 		'''
 		Returns daily valuation metrics of a stock
@@ -37,37 +33,70 @@ class YahooClient:
 			info = yf_ticker.info
 		except Exception as e:
 			return (1,
-				error_message('internet.py', f'Could not pull data for [{ticker.upper()}]',e)
+				error_message('internet.py', f'{ticker.upper()} - Could not pull data', e)
 			)
 
 		# Combine valuation metrics into a dataframe
 		try:
-			data = {'date': [str(date.today())],
-				'open': [info['open']],
-				'high': [info['dayHigh']],
-				'low': [info['dayLow']],
-				'close': [info['previousClose']],
-				'volume': [info['volume']],
-				'trailingEps': [info['trailingEps']],
-				'forwardEps': [info['forwardEps']],
-				'trailingPE': [info['trailingPE']],
-				'forwardPE': [info['forwardPE']],
-				'priceToBook': [info['priceToBook']],
-				'marketCap': [info['marketCap']],
-				'fiftyDayAverage': [info['fiftyDayAverage']],
-				'twoHundredDayAverage': [info['twoHundredDayAverage']]
+			# Use `info.get(_, -1)` so that if there is no data metric for a specific ticker, it defaults to "-1"
+			data = {
+				'date': [date.today()],
+				'open': [info.get('open', -1)],
+				'dayHigh': [info.get('dayHigh', -1)],
+				'dayLow': [info.get('dayLow', -1)],
+				'previousClose': [info.get('previousClose', -1)],
+				'dividendRate': [info.get('dividendRate', -1)],
+				'dividendYield': [info.get('dividendYield', -1)],
+				'payoutRatio': [info.get('payoutRatio', -1)],
+				'beta': [info.get('beta', -1)],
+				'trailingPE': [info.get('trailingPE', -1)],
+				'forwardPE': [info.get('forwardPE', -1)],
+				'marketCap': [info.get('marketCap', -1)],
+				'fiftyTwoWeekLow': [info.get('fiftyTwoWeekLow', -1)],
+				'fiftyTwoWeekHigh': [info.get('fiftyTwoWeekHigh', -1)],
+				'priceToSalesTrailing12Months': [info.get('priceToSalesTrailing12Months', -1)],
+				'fiftyDayAverage': [info.get('fiftyDayAverage', -1)],
+				'twoHundredDayAverage': [info.get('twoHundredDayAverage', -1)],
+				'ebitda': [info.get('ebitda', -1)],
+				'totalDebt': [info.get('totalDebt', -1)],
+				'quickRatio': [info.get('quickRatio', -1)],
+				'currentRatio': [info.get('currentRatio', -1)],
+				'totalRevenue': [info.get('totalRevenue', -1)],
+				'debtToEquity': [info.get('debtToEquity', -1)],
+				'revenuePerShare': [info.get('revenuePerShare', -1)],
+				'returnOnAssets': [info.get('returnOnAssets', -1)],
+				'returnOnEquity': [info.get('returnOnEquity', -1)],
+				'grossProfits': [info.get('grossProfits', -1)],
+				'freeCashflow': [info.get('freeCashflow', -1)],
+				'operatingCashflow': [info.get('operatingCashflow', -1)],
+				'earningsGrowth': [info.get('earningsGrowth', -1)],
+				'revenueGrowth': [info.get('revenueGrowth', -1)],
+				'grossMargins': [info.get('grossMargins', -1)],
+				'ebitdaMargins': [info.get('ebitdaMargins', -1)],
+				'operatingMargins': [info.get('operatingMargins', -1)],
+				'bookValue': [info.get('bookValue', -1)],
+				'priceToBook': [info.get('priceToBook', -1)],
+				'netIncomeToCommon': [info.get('netIncomeToCommon', -1)],
+				'trailingEps': [info.get('trailingEps', -1)],
+				'forwardEps': [info.get('forwardEps', -1)],
+				'enterpriseValue': [info.get('enterpriseValue', -1)],
+				'enterpriseToRevenue': [info.get('enterpriseToRevenue', -1)],
+				'enterpriseToEbitda': [info.get('enterpriseToEbitda', -1)],
+				'epsCurrentYear': [info.get('epsCurrentYear', -1)],
+				'priceEpsCurrentYear': [info.get('priceEpsCurrentYear', -1)],
+				'trailingPegRatio': [info.get('trailingPegRatio', -1)],
 			}
 		except KeyError as e:
 			# Key error will usually mean the user did not enter the ticker name corectly
 			return (1,
-				error_message('internet.py', f'Unable to create price DataFrame for [{ticker.upper()}]', e)
+				error_message('internet.py', f'{ticker.upper()} - Unable to create price DataFrame', e)
 			)
 
 		return (0, pd.DataFrame(data))
 
 class NewsWebScraper:
 	'''
-	# WebScaper
+	# NewsWebScaper
 
 	Class used to get the content of news webpages provided by `yfinance`
 	'''
@@ -82,7 +111,7 @@ class NewsWebScraper:
 			yf_news = yf.Search(ticker, news_count=10).news
 		except Exception as e:
 			return (1,
-				error_message('internet.py', f'Could not pull news data for [{ticker.upper()}]', e)
+				error_message('internet.py', f'{ticker.upper()} - Could not pull news data', e)
 			)
 
 		# Make a list to store each scraped site
@@ -98,7 +127,7 @@ class NewsWebScraper:
 			news_data = pd.DataFrame.from_dict(yf_news)[['title','publisher','providerPublishTime','link']]
 		except Exception as e:
 			return (1,
-				error_message('internet.py', 'Could not create DataFrame from news source', e)
+				error_message('internet.py', f'{ticker.upper()} - Could not create DataFrame from news source', e)
 			)
 
 		# Get the html content of each webpage
@@ -145,9 +174,7 @@ class NewsWebScraper:
 
 		# Return the scraped sites only if there are enough "NewsWabPage" objects
 		if len(scraped_sites) == 0:
-			return (1, 
-				error_message('internet.py', f'Could not pull sufficient news data for [{ticker.uper()}]', e)
-			)
+			return (1, error_message('internet.py', f'{ticker.upper()} - Could not pull sufficient news data', e))
 		
 		return (0, scraped_sites)
 
@@ -170,43 +197,3 @@ class NewsWebPage:
 			self.content = content # The content in the news article
 
 			self.link = link
-
-class OllamaAPI:
-	'''
-	# OllamaAPI
-	Class used to talk to the provided Ollama API endpoint
-
-	NOTE: This endpoint is not secured unless done so by an outside party, do not 
-	share sensitive information unless you are sure nobody can access it!
-	'''
-	def __init__(self, server_hostname:str, ollama_model:str):
-		self.url = f"http://{server_hostname}:11434/api/generate" # API Endpoint to Ollama
-
-		self.model = ollama_model
-
-		self.headers={
-			"Content-Type":"application/json"
-		}
-
-	def send_message(self, message:str):
-		'''
-		Sends a message to the Ollama API
-		'''
-
-		# Create our POST data
-		data = {
-			"model":self.model,
-			"prompt":message,
-			"stream":False
-		}
-
-		# Post our response to the Ollama API
-		response = requests.post(self.url, headers=self.headers, data=json.dumps(data))
-
-		# Return our data, or a status code indicating the error
-		if response.status_code == 200:
-			response = response.text
-			response = json.loads(response)
-			return str(response['response'])
-		else:
-			return response.status_code
