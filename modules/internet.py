@@ -4,6 +4,8 @@ import requests
 from bs4 import BeautifulSoup
 import yfinance as yf
 
+from yfinance.exceptions import YFRateLimitError
+
 import json
 import os
 
@@ -34,6 +36,10 @@ class YahooClient:
 		except Exception as e:
 			return (1,
 				error_message('internet.py', f'{ticker.upper()} - Could not pull data', e)
+			)
+		except YFRateLimitError:
+			return (1,
+				error_message('internet.py', f'{ticker.upper()} - Rate limiting implemented, try again', e)
 			)
 
 		# Combine valuation metrics into a dataframe
@@ -112,6 +118,10 @@ class NewsWebScraper:
 		except Exception as e:
 			return (1,
 				error_message('internet.py', f'{ticker.upper()} - Could not pull news data', e)
+			)
+		except YFRateLimitError:
+			return (1,
+				error_message('internet.py', f'{ticker.upper()} - Rate limiting implemented, try again', e)
 			)
 
 		# Make a list to store each scraped site
