@@ -1,0 +1,7 @@
+How to set up crontab to run "download.py" once a day
+
+1. Run command `crontab -e`
+	a. Choose the text editor of your choice
+
+2. Enter when you want the download script to run (this example chooses every day at 9:00 PM)
+	a. 0 21 * * * /home/nathan/miniconda3/envs/stocks/bin/python /home/nathan/stocks/download.py
