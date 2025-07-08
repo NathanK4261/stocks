@@ -1,5 +1,7 @@
 # NOTE: Call this using "source"
 #	EXAMPLE: `source setup.sh`
+
+# Install packages
 conda create -n stocks
 conda activate stocks
 conda install pytorch -c pytorch-nightly
@@ -17,4 +19,9 @@ pip install --upgrade yfinance
 #pip install --upgrade newspaper3k
 #pip install --upgrade lxml_html_clean
 conda clean -a -y
+
+# Create directories needed for program(s)
+mkdir stockdata
+mkdir logs
+
 clear
