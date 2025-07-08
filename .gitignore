@@ -1,8 +1,12 @@
 /.vscode
 /.DS_Store
 /__pycache__
+
+/misc/.DS_Store
+
 /modules/__pycache__
-/.DS_Store
+
 /stockdata/.DS_Store
 /stockdata/*
+
 /logs/*
