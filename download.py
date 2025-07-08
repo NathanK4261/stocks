@@ -1,17 +1,27 @@
 from modules.internet import YahooClient, NewsWebScraper
-
 import modules.tickers
-from yfinance import Ticker
 
+import pandas_market_calendars as mcal
 from datetime import datetime, date
 from time import sleep
 import pytz
 
 import pandas as pd
-from statistics import mean, StatisticsError
-
 import json
 import logging
+
+def market_open():
+	'''
+	Returns true if the stock market was open today
+	'''
+	# Get current date
+	day = str(date.today())
+
+	# Get the NYSE calendar from the current day
+	result = mcal.get_calendar("NYSE").schedule(start_date=day, end_date=day)
+
+	# If the calendar is not empty, the market is/was open on the current day
+	return result.empty == False
 	
 def log_msg(message: str):
 	'''
@@ -106,64 +116,58 @@ DATABASE CODE STARTS HERE
 # Log the bootup time
 logger.warning(log_msg('BOOT'))
 
-# Main logic
-while True:
-	# Start only if market has been closed for an hour (since we want todays data as well)
-	try:
-		while (
-			datetime.now(pytz.timezone('US/Eastern')).hour > 9 and 
-			datetime.now(pytz.timezone('US/Eastern')).hour <= 1
-		):
-			pass
+# Start only if market has been closed for an hour (since we want todays data as well)
+try:
+	while (
+		datetime.now(pytz.timezone('US/Eastern')).hour > 9 and 
+		datetime.now(pytz.timezone('US/Eastern')).hour <= 1
+	):
+		pass
 
-	except KeyboardInterrupt:
-		logger.warning(log_msg('KeyboardInterrupt'))
-		break
+except KeyboardInterrupt:
+	logger.warning(log_msg('KeyboardInterrupt'))
+	exit()
 
-	# Re-open config
-	with open('config.json') as f:
-		config = json.load(f)
+# Re-open config
+with open('config.json') as f:
+	config = json.load(f)
 
 
-	# If the market was not ope today, do not run
-	# Also, if there was a previous attempt, check if it is too early to attempt again
-	if str(date.today()) != config['LAST_PROTOCALL_UPDATE']:
+# If the market was not open today, do not run
+# Also, if there was a previous attempt, check if it is too early to attempt again
+if str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and market_open():
 
-		# Log when daily protocall starts
-		logger.warning(log_msg(f'START PROTO ({len(modules.tickers.TICKERS)} Tickers)'))
+	# Log when daily protocall starts
+	logger.warning(log_msg(f'START PROTO ({len(modules.tickers.TICKERS)} Tickers)'))
 
-		# Set a boolean in case we need to KeyboardInterrupt
-		run = True
+	# Set a boolean in case we need to KeyboardInterrupt
+	run = True
 
-		for ticker in modules.tickers.TICKERS:
-		
-			while run:
-				try:
-					# Iterate through every ticker
-					#logger.warning(log_msg(f'{ticker.upper()} - PULL'))
+	for ticker in modules.tickers.TICKERS:
+	
+		while run:
+			try:
+				# Iterate through every ticker
+				#logger.warning(log_msg(f'{ticker.upper()} - PULL'))
 
-					protocall_complete = run_protocall(ticker)
+				protocall_complete = run_protocall(ticker)
 
-					if protocall_complete:
-						logger.warning(log_msg(f'{ticker.upper()} - SUCCESS'))
-						break
-					else:
-						logger.warning(log_msg(f'{ticker.upper()} - FAIL'))
-						sleep(60) # Sleep for a minute and try again
+				if protocall_complete:
+					logger.warning(log_msg(f'{ticker.upper()} - SUCCESS'))
+					break
+				else:
+					logger.warning(log_msg(f'{ticker.upper()} - FAIL'))
+					sleep(60) # Sleep for a minute and try again
 
-				except KeyboardInterrupt:
-					logger.warning(log_msg('KeyboardInterrupt'))
-					run = False
+			except KeyboardInterrupt:
+				logger.warning(log_msg('KeyboardInterrupt'))
+				run = False
 
-		# If "run" is false, the user is trying to stop the program
-		if run == False:
-			break
+	# Save last update time in config
+	with open('config.json', 'w') as f:
+		config['LAST_PROTOCALL_UPDATE'] = str(date.today())
 
-		# Save last update time in config
-		with open('config.json', 'w') as f:
-			config['LAST_PROTOCALL_UPDATE'] = str(date.today())
+		json.dump(config, f, indent=4)
 
-			json.dump(config, f, indent=4)
-
-		# Log when daily protocall ends
-		logger.warning(log_msg('END PROTO'))
+	# Log when daily protocall ends
+	logger.warning(log_msg('END PROTO'))
