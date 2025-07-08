@@ -15,6 +15,7 @@ conda install pip -y
 conda install flask -y
 pip install --upgrade onnxscript
 pip install --upgrade yfinance
+pip install --upgrade pandas-market-calendars
 #pip install --upgrade ollama
 #pip install --upgrade newspaper3k
 #pip install --upgrade lxml_html_clean
