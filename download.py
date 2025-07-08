@@ -12,11 +12,6 @@ from statistics import mean, StatisticsError
 
 import json
 import logging
-
-def is_market_open():
-	if not Ticker('^GSPC').history(period='1d').empty:
-		return True
-	return False
 	
 def log_msg(message: str):
 	'''
@@ -26,7 +21,7 @@ def log_msg(message: str):
 
 # Create a logger
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename='database.log', encoding='utf-8', level=logging.WARN)
+logging.basicConfig(filename=f'logs/{str(date.today())}.log', encoding='utf-8', level=logging.WARN)
 
 # Open config
 with open('config.json') as f:
@@ -80,6 +75,8 @@ def run_protocall(ticker: str):
 			# If there is already data for the current day, ignore the pulled data
 			logger.warning(log_msg(f'{ticker} - Data already exists for curent day'))
 
+			return True
+
 		else:
 			# Add our list of "NewsWebPage" objects to our current dataframe
 			current_data['news'] = [scraped_sites]
@@ -123,40 +120,50 @@ while True:
 		logger.warning(log_msg('KeyboardInterrupt'))
 		break
 
+	# Re-open config
+	with open('config.json') as f:
+		config = json.load(f)
 
-	try:
-		# If the market was not ope today, do not run
-		# Also, if there was a previous attempt, check if it is too early to attempt again
-		if str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and is_market_open():
 
-			# Log when daily protocall starts
-			logger.warning(log_msg('START PROTO'))
+	# If the market was not ope today, do not run
+	# Also, if there was a previous attempt, check if it is too early to attempt again
+	if str(date.today()) != config['LAST_PROTOCALL_UPDATE']:
 
-			for ticker in modules.tickers.TICKERS:
-			
-				# Iterate through every ticker in the S&P 500
-				logger.warning(log_msg(f'{ticker.upper()} - PULL'))
+		# Log when daily protocall starts
+		logger.warning(log_msg(f'START PROTO ({len(modules.tickers.TICKERS)} Tickers)'))
 
-				protocall_complete = run_protocall(ticker)
+		# Set a boolean in case we need to KeyboardInterrupt
+		run = True
 
-				if protocall_complete:
-					logger.warning(log_msg(f'{ticker.upper()} - SUCCESS'))
-					
-					# Sleep for one minute to avoid rate-limiting errors
-					#sleep(60)
-				else:
-					logger.warning(log_msg(f'{ticker.upper()} - FAIL'))
-					sleep(1 * 3600) # Sleep an hour and try again
+		for ticker in modules.tickers.TICKERS:
+		
+			while run:
+				try:
+					# Iterate through every ticker
+					#logger.warning(log_msg(f'{ticker.upper()} - PULL'))
 
-			# Save last update time in config
-			with open('config.json', 'w') as f:
-				config['LAST_PROTOCALL_UPDATE'] = str(date.today())
+					protocall_complete = run_protocall(ticker)
 
-				json.dump(config, f, indent=4)
+					if protocall_complete:
+						logger.warning(log_msg(f'{ticker.upper()} - SUCCESS'))
+						break
+					else:
+						logger.warning(log_msg(f'{ticker.upper()} - FAIL'))
+						sleep(60) # Sleep for a minute and try again
 
-			# Log when daily protocall ends
-			logger.warning(log_msg('END PROTO'))
+				except KeyboardInterrupt:
+					logger.warning(log_msg('KeyboardInterrupt'))
+					run = False
 
-	except KeyboardInterrupt:
-		logger.warning(log_msg('KeyboardInterrupt'))
-		break
+		# If "run" is false, the user is trying to stop the program
+		if run == False:
+			break
+
+		# Save last update time in config
+		with open('config.json', 'w') as f:
+			config['LAST_PROTOCALL_UPDATE'] = str(date.today())
+
+			json.dump(config, f, indent=4)
+
+		# Log when daily protocall ends
+		logger.warning(log_msg('END PROTO'))
