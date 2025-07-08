@@ -128,10 +128,6 @@ except KeyboardInterrupt:
 	logger.warning(log_msg('KeyboardInterrupt'))
 	exit()
 
-# Re-open config
-with open('config.json') as f:
-	config = json.load(f)
-
 
 # If the market was not open today, do not run
 # Also, if there was a previous attempt, check if it is too early to attempt again
@@ -171,3 +167,7 @@ if str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and market_open():
 
 	# Log when daily protocall ends
 	logger.warning(log_msg('END PROTO'))
+
+# If the market was closed today or if there was a previous attempt, log that there was no attempt today
+else:
+	logger.warning(log_msg(f'PROTOCALL DID NOT RUN TODAY, MARKET WAS CLOSED OR DATA HAS ALREADY BEEN COLLECTED FOR: {str(date.today())}'))
