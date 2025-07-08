@@ -16,7 +16,7 @@ def error_message(file: str, message: str, error: Exception):
 	Returns a formatted string that can be used to log errors correctly
 	'''
 	
-	return f'[{file}]: {message} *** {str(error)} -> [Line: {error.__traceback__.tb_lineno}]'
+	return f'[{file}]: {type(error).__name__} - {message} *** {str(error)} -> [Line: {error.__traceback__.tb_lineno}]'
 
 class YahooClient:
 	'''
@@ -155,7 +155,9 @@ class NewsWebScraper:
 				data = None
 
 			# Verfiy that the site was cleanly retreived
-			if data.status_code == 200:
+			if type(data) == None:
+				pass
+			elif data.status_code == 200:
 				
 				# Get the HTML content
 				data = data.text
