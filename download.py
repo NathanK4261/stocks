@@ -60,7 +60,7 @@ def run_protocall(ticker: str):
 			logger.warning(log_msg(f'{ticker} - Data already exists for curent day'))
 
 			return True
-	except FileNotFoundError:
+	except Exception:
 		# We can ignore this error as it just means that there is no saved data on the specific ticker
 		pass
 
@@ -102,7 +102,7 @@ def run_protocall(ticker: str):
 		historical_data = pd.concat([historical_data, current_data], ignore_index=True)
 
 	# If no historical data exists, start storing historical data from today
-	except FileNotFoundError:
+	except Exception:
 
 		# Add our list of "NewsWebPage" objects to our current dataframe
 		current_data['news'] = [scraped_sites]
