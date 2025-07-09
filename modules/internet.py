@@ -155,7 +155,7 @@ class NewsWebScraper:
 				data = None
 
 			# Verfiy that the site was cleanly retreived
-			if type(data) == None:
+			if data == None:
 				pass
 			elif data.status_code == 200:
 				
