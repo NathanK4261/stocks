@@ -54,7 +54,7 @@ def run_protocall(ticker: str):
 		historical_data = pd.read_pickle(f'stockdata/{ticker}.pkl')
 
 		# Compare today's date to the latest saved date in the historical data
-		if str(date.today()) == historical_data['date'][len(historical_data) - 1]:
+		if date.today() == historical_data['date'][len(historical_data) - 1]:
 			
 			# If there is already data for the current day, ignore pulling data for today
 			logger.warning(log_msg(f'{ticker} - Data already exists for curent day'))
