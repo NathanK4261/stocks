@@ -6,3 +6,6 @@
 3. Run all scripts ("download", "format", "train", "test") inside of their directories, do not run them outside of their directories or they will fail
 
 4. yfinance version 0.2.51 destroyed functionality for obtaining news from a yf.Ticker() object. Possibly fix this later?
+
+5. When obtaining data at mightnight, data from the current day will be stored as data from the next day.
+	a. EX: Data pulled from the 9th at midnight will be stored as data from the 10th
