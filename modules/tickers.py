@@ -9,7 +9,7 @@ from pandas import read_excel
 TICKERS = []
 
 # A list of tickers not allowed to be used
-banned_tickers = ['CASH_USD', '-', 'BRK.B', 'BRK.A']
+banned_tickers = ['CASH_USD', '-', 'BRK.B', 'BRK.A', 'BF.B']
 
 
 # Updates "TICKERS" to include the latest companies in the S&P 500
