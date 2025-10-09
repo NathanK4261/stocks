@@ -1,22 +1,29 @@
-import pandas as pd
-
 import requests
 from bs4 import BeautifulSoup
+
+from pandas import DataFrame
+import pandas_market_calendars as mcal
+
 import yfinance as yf
-
 from yfinance.exceptions import YFRateLimitError
-
-import json
-import os
 
 from datetime import date, datetime, timezone
 
-def error_message(file: str, message: str, error: Exception):
+from . import valuations
+from .errors import error_message
+
+def market_open():
 	'''
-	Returns a formatted string that can be used to log errors correctly
+	Returns true if the stock market was open today
 	'''
-	
-	return f'[{file}]: {type(error).__name__} - {message} *** {str(error)} -> [Line: {error.__traceback__.tb_lineno}]'
+	# Get current date
+	day = str(date.today())
+
+	# Get the NYSE calendar from the current day
+	result = mcal.get_calendar("NYSE").schedule(start_date=day, end_date=day)
+
+	# If the calendar is not empty, the market is/was open on the current day
+	return result.empty == False
 
 class YahooClient:
 	'''
@@ -33,72 +40,29 @@ class YahooClient:
 		# Get info about the company
 		try:
 			info = yf_ticker.info
+
 		except Exception as e:
-			return (1,
-				error_message('internet.py', f'{ticker.upper()} - Could not pull data', e)
-			)
+			return error_message('internet.py', 'Could not pull data', e)
+		
 		except YFRateLimitError:
-			return (1,
-				error_message('internet.py', f'{ticker.upper()} - Rate limiting implemented, try again', e)
-			)
+			return error_message('internet.py', 'Rate limiting implemented, try again', e)
 
-		# Combine valuation metrics into a dataframe
-		try:
-			# Use `info.get(_, -1)` so that if there is no data metric for a specific ticker, it defaults to "-1"
-			data = {
-				'date': [date.today()],
-				'open': [info.get('open', -1)],
-				'dayHigh': [info.get('dayHigh', -1)],
-				'dayLow': [info.get('dayLow', -1)],
-				'previousClose': [info.get('previousClose', -1)],
-				'dividendRate': [info.get('dividendRate', -1)],
-				'dividendYield': [info.get('dividendYield', -1)],
-				'payoutRatio': [info.get('payoutRatio', -1)],
-				'beta': [info.get('beta', -1)],
-				'trailingPE': [info.get('trailingPE', -1)],
-				'forwardPE': [info.get('forwardPE', -1)],
-				'marketCap': [info.get('marketCap', -1)],
-				'fiftyTwoWeekLow': [info.get('fiftyTwoWeekLow', -1)],
-				'fiftyTwoWeekHigh': [info.get('fiftyTwoWeekHigh', -1)],
-				'priceToSalesTrailing12Months': [info.get('priceToSalesTrailing12Months', -1)],
-				'fiftyDayAverage': [info.get('fiftyDayAverage', -1)],
-				'twoHundredDayAverage': [info.get('twoHundredDayAverage', -1)],
-				'ebitda': [info.get('ebitda', -1)],
-				'totalDebt': [info.get('totalDebt', -1)],
-				'quickRatio': [info.get('quickRatio', -1)],
-				'currentRatio': [info.get('currentRatio', -1)],
-				'totalRevenue': [info.get('totalRevenue', -1)],
-				'debtToEquity': [info.get('debtToEquity', -1)],
-				'revenuePerShare': [info.get('revenuePerShare', -1)],
-				'returnOnAssets': [info.get('returnOnAssets', -1)],
-				'returnOnEquity': [info.get('returnOnEquity', -1)],
-				'grossProfits': [info.get('grossProfits', -1)],
-				'freeCashflow': [info.get('freeCashflow', -1)],
-				'operatingCashflow': [info.get('operatingCashflow', -1)],
-				'earningsGrowth': [info.get('earningsGrowth', -1)],
-				'revenueGrowth': [info.get('revenueGrowth', -1)],
-				'grossMargins': [info.get('grossMargins', -1)],
-				'ebitdaMargins': [info.get('ebitdaMargins', -1)],
-				'operatingMargins': [info.get('operatingMargins', -1)],
-				'bookValue': [info.get('bookValue', -1)],
-				'priceToBook': [info.get('priceToBook', -1)],
-				'netIncomeToCommon': [info.get('netIncomeToCommon', -1)],
-				'trailingEps': [info.get('trailingEps', -1)],
-				'forwardEps': [info.get('forwardEps', -1)],
-				'enterpriseValue': [info.get('enterpriseValue', -1)],
-				'enterpriseToRevenue': [info.get('enterpriseToRevenue', -1)],
-				'enterpriseToEbitda': [info.get('enterpriseToEbitda', -1)],
-				'epsCurrentYear': [info.get('epsCurrentYear', -1)],
-				'priceEpsCurrentYear': [info.get('priceEpsCurrentYear', -1)],
-				'trailingPegRatio': [info.get('trailingPegRatio', -1)],
-			}
-		except KeyError as e:
-			# Key error will usually mean the user did not enter the ticker name corectly
-			return (1,
-				error_message('internet.py', f'{ticker.upper()} - Unable to create price DataFrame', e)
-			)
+		# Combine valuation metrics into a single dict
+		# Use `info.get(_, None)` so that if there is no data metric for a specific ticker, it defaults to "None"
+		data = {}
+		data['ticker'] = ticker
+		data['date'] = str(date.today())
 
-		return (0, pd.DataFrame(data))
+		for value in valuations.yf_values:
+
+			try:
+				data[value] = info.get(value, None)
+
+			except Exception as e:
+				# Key error will usually mean the user did not enter the ticker/value name corectly
+				return error_message('internet.py', 'Unable to create price DataFrame', e)
+
+		return data
 
 class NewsWebScraper:
 	'''
@@ -115,14 +79,12 @@ class NewsWebScraper:
 		# Search the news on yfinance
 		try:
 			yf_news = yf.Search(ticker, news_count=10).news
+
 		except Exception as e:
-			return (1,
-				error_message('internet.py', f'{ticker.upper()} - Could not pull news data', e)
-			)
+			return error_message('internet.py', 'Could not pull news data', e)
+
 		except YFRateLimitError:
-			return (1,
-				error_message('internet.py', f'{ticker.upper()} - Rate limiting implemented, try again', e)
-			)
+			return error_message('internet.py', 'Rate limiting implemented, try again', e)
 
 		# Make a list to store each scraped site
 		scraped_sites = []
@@ -134,11 +96,10 @@ class NewsWebScraper:
 
 		# Fetch historical news
 		try:
-			news_data = pd.DataFrame.from_dict(yf_news)[['title','publisher','providerPublishTime','link']]
+			news_data = DataFrame.from_dict(yf_news)[['title','publisher','providerPublishTime','link']]
+		
 		except Exception as e:
-			return (1,
-				error_message('internet.py', f'{ticker.upper()} - Could not create DataFrame from news source', e)
-			)
+			return error_message('internet.py', 'Could not create DataFrame from news source', e)
 
 		# Get the html content of each webpage
 		for i in range(len(news_data)):
@@ -176,9 +137,8 @@ class NewsWebScraper:
 				if len(news_content) != 0 or news_content is not None:
 					scraped_sites.append(
 						NewsWebPage(
+							ticker,
 							news_data['title'][i],
-							news_data['publisher'][i],
-							news_data['providerPublishTime'][i],
 							news_content,
 							news_data['link'][i]
 						)
@@ -186,9 +146,9 @@ class NewsWebScraper:
 
 		# Return the scraped sites only if there are enough "NewsWabPage" objects
 		if len(scraped_sites) == 0:
-			return (1, error_message('internet.py', f'{ticker.upper()} - Could not pull sufficient news data', e))
+			return error_message('internet.py', 'Could not pull sufficient news data', e)
 		
-		return (0, scraped_sites)
+		return scraped_sites
 
 class NewsWebPage:
 		'''
@@ -199,12 +159,12 @@ class NewsWebPage:
 		NOTE: This class is used in `NewsWebScraper`, so there is no need to 
 		contruct objects using this class manually
 		'''
-		def __init__(self, title: str, publisher: str, date: str, content: str, link: str):
+		def __init__(self, ticker: str, title: str, content: str, link: str, date_scraped = date.today()):
+			self.ticker = ticker # The company ticker that the web page is talking about
+
 			self.title = title # Title of the news article
 
-			self.publisher = publisher # Publisher of the news article
-
-			self.date = datetime.fromtimestamp(date, tz=timezone.utc)
+			self.date_scraped = date_scraped # The date in which the news article was scraped
 
 			self.content = content # The content in the news article
 
