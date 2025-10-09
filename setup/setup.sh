@@ -5,7 +5,6 @@
 conda create -n stocks
 conda activate stocks
 conda install pytorch -c pytorch-nightly
-conda install -c conda-forge mlx-lm -y
 conda install anaconda::pandas -y
 conda install openpyxl -y
 conda install pytz -y
@@ -15,11 +14,12 @@ conda install requests -y
 conda install pip -y
 #conda install flask -y
 #pip install --upgrade onnxscript
+pip install --upgrade ollama
 pip install --upgrade yfinance
 pip install --upgrade pandas-market-calendars
 #pip install --upgrade newspaper3k
 #pip install --upgrade lxml_html_clean
-conda clean -a -l -y
+conda clean -a -y
 
 # Create directories needed for program(s)
 mkdir stockdata
