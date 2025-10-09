@@ -54,6 +54,7 @@ class LlamaChat:
 					except KeyboardInterrupt:
 						exit(0)
 					print('Added model:',model)
+					self.model = model
 					break
 				else:
 					quit(1)
