@@ -55,25 +55,16 @@ def run_protocall(ticker: str):
 		logger.error(log_msg(scraped_sites))
 
 		scraped_sites = []
+
+	# TODO: Get news sentiment
 	
 	# Add stockdata to database, and news data to dataframe
-	try:
+	result = db_manager.add_data(current_data)
 
-		# Make entries to table of specific stock
-		result = db_manager.add_data(current_data)
+	if type(result) == str: # Error
+		logger.error(log_msg(result))
 
-		if type(result) == str: # Error
-			logger.error(log_msg(result))
-
-			return False
-
-	# If no historical data exists, start storing historical data from today
-	except Exception as e:
-		logger.error(log_msg(error_message('download.py','Error while saving stock data',e)))
 		return False
-
-	# Store news data
-	news_manager.add_news(scraped_sites)
 
 	# If everything works without error, return "True"
 	return True
