@@ -1,27 +1,14 @@
-from modules.internet import YahooClient, NewsWebScraper
+from modules.internet import YahooClient, NewsWebScraper, market_open
 import modules.tickers
+import modules.datamanager
+from modules.errors import error_message
 
-import pandas_market_calendars as mcal
 from datetime import datetime, date
 from time import sleep
 import pytz
 
-import pandas as pd
 import json
 import logging
-
-def market_open():
-	'''
-	Returns true if the stock market was open today
-	'''
-	# Get current date
-	day = str(date.today())
-
-	# Get the NYSE calendar from the current day
-	result = mcal.get_calendar("NYSE").schedule(start_date=day, end_date=day)
-
-	# If the calendar is not empty, the market is/was open on the current day
-	return result.empty == False
 	
 def log_msg(message: str):
 	'''
@@ -37,6 +24,9 @@ logging.basicConfig(filename=f'logs/{str(date.today())}.log', encoding='utf-8', 
 with open('config.json') as f:
 	config = json.load(f)
 
+# Initialize database manager and news manager
+db_manager = modules.datamanager.DatabaseManager()
+
 # Create a YahooClient
 yahoo_client = YahooClient()
 
@@ -48,70 +38,42 @@ def run_protocall(ticker: str):
 	Collects data on the specified ticker, analyzes it, and saves it as a pandas dataframe
 	'''
 
-	# Check to see if data was already collected for the current day
-	try:
-		# Read from historical data
-		historical_data = pd.read_pickle(f'stockdata/{ticker}.pkl')
-
-		# Compare today's date to the latest saved date in the historical data
-		if date.today() == historical_data['date'][len(historical_data) - 1]:
-			
-			# If there is already data for the current day, ignore pulling data for today
-			logger.warning(log_msg(f'{ticker} - Data already exists for curent day'))
-
-			return True
-	except Exception:
-		# We can ignore this error as it just means that there is no saved data on the specific ticker
-		pass
-
 	# Get the daily market data
-	result, current_data = yahoo_client.current(ticker)
+	current_data = yahoo_client.current(ticker)
 
-	if result == 1: # 1 = Error
+	if type(current_data) == str: # Error
 		logger.error(log_msg(current_data))
 
 		return False
 
 	# Collect news information
-	result, scraped_sites = scraper.scrape_from_yf(ticker)
+	scraped_sites = scraper.scrape_from_yf(ticker)
 
-	if result == 1: # 1 = Error
+	if type(scraped_sites) == str: # Error
 
 		# If there is no news data, set `scraped_sites` to an empty list
 		logger.error(log_msg(scraped_sites))
 
 		scraped_sites = []
-	else:
-
-		# Extract only the text from each "NewsWebPage" object
-		temp = []
-
-		for site in scraped_sites:
-			temp.append([site.title, site.content])
-
-		scraped_sites = temp
 	
-	# Try and load saved historical data
+	# Add stockdata to database, and news data to dataframe
 	try:
-		historical_data = pd.read_pickle(f'stockdata/{ticker}.pkl')
 
-		# Add our list of "NewsWebPage" objects to our current dataframe
-		current_data['news'] = [scraped_sites]
+		# Make entries to table of specific stock
+		result = db_manager.add_data(current_data)
 
-		# If there is not data for the current day, make a new entry
-		historical_data = pd.concat([historical_data, current_data], ignore_index=True)
+		if type(result) == str: # Error
+			logger.error(log_msg(result))
+
+			return False
 
 	# If no historical data exists, start storing historical data from today
-	except Exception:
+	except Exception as e:
+		logger.error(log_msg(error_message('download.py','Error while saving stock data',e)))
+		return False
 
-		# Add our list of "NewsWebPage" objects to our current dataframe
-		current_data['news'] = [scraped_sites]
-
-		# Set our historical dataframe to our current dataframe
-		historical_data = current_data
-
-	# Save the dataframe as a file
-	historical_data.to_pickle(f'stockdata/{ticker}.pkl')
+	# Store news data
+	news_manager.add_news(scraped_sites)
 
 	# If everything works without error, return "True"
 	return True
@@ -148,10 +110,10 @@ if str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and market_open():
 	# Set a boolean in case we need to KeyboardInterrupt
 	save_data = True
 
-	for ticker in modules.tickers.TICKERS:
-	
-		while True:
-			try:
+	try:
+		for ticker in modules.tickers.TICKERS:
+		
+			while True:
 				# Iterate through every ticker
 				
 				#logger.warning(log_msg(f'{ticker.upper()} - PULL'))
@@ -164,10 +126,9 @@ if str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and market_open():
 				else:
 					logger.warning(log_msg(f'{ticker.upper()} - FAIL'))
 					sleep(60) # Sleep for a minute and try again
-
-			except KeyboardInterrupt:
-				logger.warning(log_msg('KeyboardInterrupt'))
-				save_data = False
+	except KeyboardInterrupt:
+		logger.warning(log_msg('KeyboardInterrupt'))
+		quit()
 
 	# Save last update time in config, but only if "save_data" is set to "True"
 	if save_data:
@@ -175,6 +136,9 @@ if str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and market_open():
 			config['LAST_PROTOCALL_UPDATE'] = str(date.today())
 
 			json.dump(config, f, indent=4)
+
+	# Commit data to database
+	db_manager.commit_all()
 
 	# Log when daily protocall ends
 	logger.warning(log_msg('END PROTO'))
