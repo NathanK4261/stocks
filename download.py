@@ -1,11 +1,14 @@
 from modules.internet import YahooClient, NewsWebScraper, market_open
 import modules.tickers
 import modules.datamanager
+import modules.llm
 from modules.errors import error_message
 
 from datetime import datetime, date
 from time import sleep
 import pytz
+
+from statistics import mean
 
 import json
 import logging
@@ -23,6 +26,9 @@ logging.basicConfig(filename=f'logs/{str(date.today())}.log', encoding='utf-8', 
 # Open config
 with open('config.json') as f:
 	config = json.load(f)
+
+# Initialize ollama
+llm = modules.llm.LlamaChat()
 
 # Initialize database manager and news manager
 db_manager = modules.datamanager.DatabaseManager()
@@ -57,6 +63,29 @@ def run_protocall(ticker: str):
 		scraped_sites = []
 
 	# TODO: Get news sentiment
+	sentiments = []
+
+	# Iterate through each news article for the given ticker
+	for news_site in scraped_sites:
+
+		# Run the custom news prompt for the article
+		site_sentiment = llm.news_prompt(news_site)
+
+		# Warn user of missing sentiment in log file
+		if type(site_sentiment) == str():
+			print(site_sentiment)
+			logger.warning(log_msg(site_sentiment))
+			#sentiments.append(5) --> Could do this as an alternative, give a more neutral rating of the stock
+		
+		# If sentiment extracted correctly, add to "sentiments" list
+		elif type(site_sentiment) == int():
+			sentiments.append(site_sentiment)
+
+	# Average the sentiments
+	avg_sentiment = mean(sentiments)
+
+	# Add sentiment to current data
+	current_data['sentiment'] = avg_sentiment
 	
 	# Add stockdata to database, and news data to dataframe
 	result = db_manager.add_data(current_data)
