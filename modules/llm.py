@@ -4,6 +4,9 @@ import ollama
 
 from httpx import ConnectError
 
+from .internet import NewsWebPage
+from .errors import error_message
+
 class LlamaPrompt:
 	'''
 	Stores information on specific prompts
@@ -76,3 +79,28 @@ class LlamaChat:
 			return str(response['message']['content']), LlamaPrompt(self.model,message,response['message']['content'])
 		else:
 			return str(response['message']['content'])
+		
+	def news_prompt(self, site: NewsWebPage):
+		'''
+		A custom prompt that returns the sentiment of a company's stock based on the news site
+		'''
+
+		prompt = f'''
+			\rImagine you are an investor, and are deciding whether or not to buy {site.ticker} stock. 
+			\rYou decide to read a news article, and rank how certain you are that the stock will rise tomomrow on a scale from 1 to 10.
+			\rWhile you are reading, you ignore any information such as advertisements, and focus only on the part of the article that could impact the price
+			\rof {site.ticker} stock.
+
+			\rPROVIDE ME WITH A RATING BETWEEN 1 AND 10. ONLY RETURN A NUMBER, AND NOTHING ELSE!
+
+			\rArticle: {site.title}
+
+			\r{site.content}
+		'''
+		
+		try:
+			sentiment = int(self.prompt(prompt))
+		except ValueError as e:
+			return error_message('llm.py', f'Could not obtain sentiment for news article on {site.ticker}', e)
+		
+		return sentiment
