@@ -72,7 +72,7 @@ def run_protocall(ticker: str):
 		site_sentiment = llm.news_prompt(news_site)
 
 		# Warn user of missing sentiment in log file
-		if type(site_sentiment) == str():
+		if type(site_sentiment) == str:
 			print(site_sentiment)
 			logger.warning(log_msg(site_sentiment))
 			#sentiments.append(5) --> Could do this as an alternative, give a more neutral rating of the stock
