@@ -128,9 +128,6 @@ try:
 		# Log when daily protocall starts
 		logger.warning(log_msg(f'START PROTO ({len(modules.tickers.TICKERS)} Tickers)'))
 
-		# Set a boolean in case we need to KeyboardInterrupt
-		save_data = True
-
 		for ticker in modules.tickers.TICKERS:
 		
 			attempts = 3
@@ -153,11 +150,10 @@ try:
 					attempts -= 1
 
 		# Save last update time in config, but only if "save_data" is set to "True"
-		if save_data:
-			with open('config.json', 'w') as f:
-				config['LAST_PROTOCALL_UPDATE'] = str(date.today())
+		with open('config.json', 'w') as f:
+			config['LAST_PROTOCALL_UPDATE'] = str(date.today())
 
-				json.dump(config, f, indent=4)
+			json.dump(config, f, indent=4)
 
 		# Commit data to database
 		db_manager.commit_all()
