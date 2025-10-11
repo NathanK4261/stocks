@@ -100,7 +100,7 @@ def run_protocall(ticker: str):
 
 '''
 #########################
-DATABASE CODE STARTS HERE
+MAIN CODE STARTS HERE
 #########################
 '''
 
@@ -122,18 +122,20 @@ except KeyboardInterrupt:
 
 # If the market was not open today, do not run
 # Also, if there was a previous attempt, check if it is too early to attempt again
-if str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and market_open():
+try:
+	if str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and market_open():
 
-	# Log when daily protocall starts
-	logger.warning(log_msg(f'START PROTO ({len(modules.tickers.TICKERS)} Tickers)'))
+		# Log when daily protocall starts
+		logger.warning(log_msg(f'START PROTO ({len(modules.tickers.TICKERS)} Tickers)'))
 
-	# Set a boolean in case we need to KeyboardInterrupt
-	save_data = True
+		# Set a boolean in case we need to KeyboardInterrupt
+		save_data = True
 
-	try:
 		for ticker in modules.tickers.TICKERS:
 		
-			while True:
+			attempts = 3
+
+			while attempts > 0:
 				# Iterate through every ticker
 				
 				#logger.warning(log_msg(f'{ticker.upper()} - PULL'))
@@ -142,27 +144,31 @@ if str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and market_open():
 
 				if protocall_complete:
 					logger.warning(log_msg(f'{ticker.upper()} - SUCCESS'))
-					break
+					attempts = 0
+
 				else:
 					logger.warning(log_msg(f'{ticker.upper()} - FAIL'))
 					sleep(60) # Sleep for a minute and try again
-	except KeyboardInterrupt:
-		logger.warning(log_msg('KeyboardInterrupt'))
-		quit()
 
-	# Save last update time in config, but only if "save_data" is set to "True"
-	if save_data:
-		with open('config.json', 'w') as f:
-			config['LAST_PROTOCALL_UPDATE'] = str(date.today())
+					attempts -= 1
 
-			json.dump(config, f, indent=4)
+		# Save last update time in config, but only if "save_data" is set to "True"
+		if save_data:
+			with open('config.json', 'w') as f:
+				config['LAST_PROTOCALL_UPDATE'] = str(date.today())
 
-	# Commit data to database
-	db_manager.commit_all()
+				json.dump(config, f, indent=4)
 
-	# Log when daily protocall ends
-	logger.warning(log_msg('END PROTO'))
+		# Commit data to database
+		db_manager.commit_all()
 
-# If the market was closed today or if there was a previous attempt, log that there was no attempt today
-else:
-	logger.warning(log_msg(f'PROTOCALL DID NOT RUN TODAY, MARKET WAS CLOSED OR DATA HAS ALREADY BEEN COLLECTED FOR: {str(date.today())}'))
+		# Log when daily protocall ends
+		logger.warning(log_msg('END PROTO'))
+
+	# If the market was closed today or if there was a previous attempt, log that there was no attempt today
+	else:
+		logger.warning(log_msg(f'PROTOCALL DID NOT RUN TODAY, MARKET WAS CLOSED OR DATA HAS ALREADY BEEN COLLECTED FOR: {str(date.today())}'))
+
+except KeyboardInterrupt:
+	logger.warning(log_msg('KeyboardInterrupt'))
+	quit()
