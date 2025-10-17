@@ -5,9 +5,6 @@ Module that manages the database for stock data, and stores news imformation on 
 '''
 
 import sqlite3
-import pickle
-
-from io import UnsupportedOperation
 
 from .errors import error_message
 
@@ -102,3 +99,9 @@ class DatabaseManager:
 		'''
 
 		self.conn.commit()
+
+	def disconnect(self):
+		'''
+		Disconnects user from database
+		'''
+		self.conn.close()
