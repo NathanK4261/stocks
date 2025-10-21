@@ -1,7 +1,6 @@
 /.vscode
 /.DS_Store
 /__pycache__
-/config.json
 
 # Streamlit data
 /.streamlit
