@@ -8,20 +8,24 @@ from datetime import datetime, date
 from time import sleep
 import pytz
 
-from statistics import mean
+from statistics import mean, StatisticsError
 
 import json
 import logging
-	
+import pickle
+
+# Have variable that stores the date, so data collection retians the same date
+set_date = str(date.today())
+
 def log_msg(message: str):
 	'''
-	Creates an formatted message for the logger
+	Creates a formatted message for the logger
 	'''
 	return (f'{str(date.today())} @ {datetime.now().hour}:{datetime.now().minute} - {message}')
 
 # Create a logger
 logger = logging.getLogger(__name__)
-logging.basicConfig(filename=f'logs/{str(date.today())}.log', encoding='utf-8', level=logging.WARN)
+logging.basicConfig(filename=f'logs/{set_date}.log', encoding='utf-8', level=logging.WARN)
 
 # Open config
 with open('config.json') as f:
@@ -30,8 +34,9 @@ with open('config.json') as f:
 # Initialize ollama
 llm = modules.llm.LlamaChat()
 
-# Initialize database manager and news manager
+# Initialize database manager
 db_manager = modules.datamanager.DatabaseManager()
+db_manager.new_table()
 
 # Create a YahooClient
 yahoo_client = YahooClient()
@@ -39,13 +44,13 @@ yahoo_client = YahooClient()
 # Set up web scraper
 scraper = NewsWebScraper()
 
-def run_protocall(ticker: str):
+def run_protocol(ticker: str):
 	'''
 	Collects data on the specified ticker, analyzes it, and saves it as a pandas dataframe
 	'''
 
 	# Get the daily market data
-	current_data = yahoo_client.current(ticker)
+	current_data = yahoo_client.current(ticker, set_date)
 
 	if type(current_data) == str: # Error
 		logger.error(log_msg(current_data))
@@ -62,29 +67,30 @@ def run_protocall(ticker: str):
 
 		scraped_sites = []
 
-	# TODO: Get news sentiment
+	# Pickle news information and store it as a BLOB in SQL
+	current_data['news'] = pickle.dumps(scraped_sites)
+
+	# Create list to store sentiments
 	sentiments = []
 
-	# Iterate through each news article for the given ticker
-	for news_site in scraped_sites:
+	# Iterate through every article
+	for site in scraped_sites:
 
-		# Run the custom news prompt for the article
-		site_sentiment = llm.news_prompt(news_site)
+		# Obtain sentiment from article
+		sentiment = llm.news_prompt(site)
 
-		# Warn user of missing sentiment in log file
-		if type(site_sentiment) == str:
-			print(site_sentiment)
-			logger.warning(log_msg(site_sentiment))
-			#sentiments.append(5) --> Could do this as an alternative, give a more neutral rating of the stock
-		
-		# If sentiment extracted correctly, add to "sentiments" list
-		elif type(site_sentiment) == int():
-			sentiments.append(site_sentiment)
+		if type(sentiment) == int: # Sentiment obtained correctly
+			sentiments.append(sentiment)
 
-	# Average the sentiments
-	avg_sentiment = mean(sentiments)
+	try:
+		# Average sentiments
+		avg_sentiment = mean(sentiments)
 
-	# Add sentiment to current data
+	except StatisticsError:
+		# If there was no sentiment values in the list, just default to 5
+		avg_sentiment = 5
+
+	# Update sentiment to caluclated sentiment
 	current_data['sentiment'] = avg_sentiment
 	
 	# Add stockdata to database, and news data to dataframe
@@ -104,67 +110,55 @@ MAIN CODE STARTS HERE
 #########################
 '''
 
-# Log the bootup time
-logger.warning(log_msg('BOOT'))
-
 # Start only if market has been closed for an hour (since we want todays data as well)
-try:
-	while (
-		datetime.now(pytz.timezone('US/Eastern')).hour > 9 and 
-		datetime.now(pytz.timezone('US/Eastern')).hour <= 1
-	):
-		pass
-
-except KeyboardInterrupt:
-	logger.warning(log_msg('KeyboardInterrupt'))
-	exit()
+while (
+	datetime.now(pytz.timezone('US/Eastern')).hour > 9 and 
+	datetime.now(pytz.timezone('US/Eastern')).hour <= 17
+):
+	pass
 
 
 # If the market was not open today, do not run
 # Also, if there was a previous attempt, check if it is too early to attempt again
-try:
-	if str(date.today()) != config['LAST_PROTOCALL_UPDATE'] and market_open():
+if set_date != config['LAST_PROTOCOL_UPDATE'] and market_open():
 
-		# Log when daily protocall starts
-		logger.warning(log_msg(f'START PROTO ({len(modules.tickers.TICKERS)} Tickers)'))
+	# Log when data collection starts
+	logger.warning(log_msg(f'START DATA COLLECTION ({len(modules.tickers.TICKERS)} Tickers)'))
 
-		for ticker in modules.tickers.TICKERS:
-		
-			attempts = 3
+	# Iterate through every ticker
+	for ticker in modules.tickers.TICKERS:
 
-			while attempts > 0:
-				# Iterate through every ticker
-				
-				#logger.warning(log_msg(f'{ticker.upper()} - PULL'))
+		# Collect data for specific ticker
+		protocol_complete = run_protocol(ticker)
 
-				protocall_complete = run_protocall(ticker)
+		if protocol_complete:
+			logger.warning(log_msg(f'{ticker.upper()} - SUCCESS'))
 
-				if protocall_complete:
-					logger.warning(log_msg(f'{ticker.upper()} - SUCCESS'))
-					attempts = 0
+		else:
+			logger.warning(log_msg(f'{ticker.upper()} - FAIL'))
 
-				else:
-					logger.warning(log_msg(f'{ticker.upper()} - FAIL'))
-					sleep(60) # Sleep for a minute and try again
+			# Sleep for 2 minutes and try again
+			sleep(120)
 
-					attempts -= 1
+			protocol_complete = run_protocol(ticker)
 
-		# Save last update time in config, but only if "save_data" is set to "True"
-		with open('config.json', 'w') as f:
-			config['LAST_PROTOCALL_UPDATE'] = str(date.today())
+			if protocol_complete:
+				logger.warning(log_msg(f'{ticker.upper()} - SUCCESS'))
+			else:
+				logger.warning(log_msg(f'{ticker.upper()} - FAIL x2'))
 
-			json.dump(config, f, indent=4)
+	# Log when data collection ends
+	logger.warning(log_msg('DATA COLLECTED'))
 
-		# Commit data to database
-		db_manager.commit_all()
+	# Disconnect from database
+	db_manager.disconnect()
 
-		# Log when daily protocall ends
-		logger.warning(log_msg('END PROTO'))
+	# Save last update time in config, but only if "save_data" is set to "True"
+	with open('config.json', 'w') as f:
+		config['LAST_PROTOCOL_UPDATE'] = set_date
 
-	# If the market was closed today or if there was a previous attempt, log that there was no attempt today
-	else:
-		logger.warning(log_msg(f'PROTOCALL DID NOT RUN TODAY, MARKET WAS CLOSED OR DATA HAS ALREADY BEEN COLLECTED FOR: {str(date.today())}'))
+		json.dump(config, f, indent=4)
 
-except KeyboardInterrupt:
-	logger.warning(log_msg('KeyboardInterrupt'))
-	quit()
+# If the market was closed today or if there was a previous attempt, log that there was no attempt today
+else:
+	logger.warning(log_msg(f'PROTOCOL DID NOT RUN TODAY, MARKET WAS CLOSED OR DATA HAS ALREADY BEEN COLLECTED FOR: {set_date}'))
