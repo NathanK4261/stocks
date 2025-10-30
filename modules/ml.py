@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
 from torch import Tensor, tensor, load, float32, long
-from torch.nn import LSTM, Linear, Module, CrossEntropyLoss
+from torch.nn import LSTM, Linear, Module, MSELoss
 from torch.optim import SGD
 
 from sklearn.preprocessing import StandardScaler
@@ -15,6 +15,11 @@ with open('config.json') as f:
 	config = json.load(f)
 
 class MLTools:
+	'''
+	# MLTools
+
+	Class that allows you to properly intialize objects for machine learning on stock data
+	'''
 	def __init__(self, device: str = 'cpu', manual_init: bool = False):
 		if not manual_init:
 			# Create our model, loss function, and optimizer
@@ -56,7 +61,7 @@ class MLTools:
 		
 	def lfunc(self):
 		# Create loss function
-		return CrossEntropyLoss() # Used to calculate loss for classification tasks (buy stock, sell stock, hold assets)
+		return MSELoss() # Used to calculate loss for classification tasks (buy stock, sell stock, hold assets)
 
 	# Create optimizer
 	def optim(self):
