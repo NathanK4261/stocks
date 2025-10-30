@@ -15,6 +15,8 @@ from .errors import error_message
 def market_open():
 	'''
 	Returns true if the stock market was open today
+
+	Does NOT tell you if market is open at the current time, just if the market was open on the current day
 	'''
 	# Get current date
 	day = str(date.today())
@@ -30,7 +32,7 @@ class YahooClient:
 	# YahooClient
 	Uses the `yfinance` library to get market data for a stock trading AI
 	'''
-	def current(self, ticker: str):
+	def current(self, ticker: str, set_date = str(date.today())):
 		'''
 		Returns daily valuation metrics of a stock
 		'''
@@ -51,7 +53,7 @@ class YahooClient:
 		# Use `info.get(_, None)` so that if there is no data metric for a specific ticker, it defaults to "None"
 		data = {}
 		data['ticker'] = ticker
-		data['date'] = str(date.today())
+		data['date'] = set_date
 
 		for value in valuations.yf_values:
 
@@ -78,7 +80,7 @@ class NewsWebScraper:
 
 		# Search the news on yfinance
 		try:
-			yf_news = yf.Search(ticker, news_count=10).news
+			yf_news = yf.Search(ticker, news_count=3).news
 
 		except Exception as e:
 			return error_message('internet.py', 'Could not pull news data', e)
@@ -99,7 +101,7 @@ class NewsWebScraper:
 			news_data = DataFrame.from_dict(yf_news)[['title','publisher','providerPublishTime','link']]
 		
 		except Exception as e:
-			return error_message('internet.py', 'Could not create DataFrame from news source', e)
+			return error_message('internet.py', f'Could not create DataFrame for {ticker} from news source', e)
 
 		# Get the html content of each webpage
 		for i in range(len(news_data)):
