@@ -8,6 +8,10 @@
 /Dashboard.py
 
 /misc/.DS_Store
+/misc/boot_dashboard.sh
+/misc/boot_protocol.sh
+/misc/com.nathankeidel.dashboard.plist
+/misc/com.nathankeidel.protocol.plist
 
 /modules/__pycache__
 
