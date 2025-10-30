@@ -21,11 +21,13 @@ pip install --upgrade pandas-market-calendars
 #pip install --upgrade lxml_html_clean
 pip install --upgrade streamlit
 pip install --upgrade streamlit-scrollable-textbox
+pip install --upgrade plotly
 pip install --upgrade Authlib
 conda clean -a -y
 
 # Create directories needed for program(s)
 mkdir stockdata
+mkdir StockNet
 mkdir logs
 
 clear
