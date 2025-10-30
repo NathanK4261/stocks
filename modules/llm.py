@@ -86,21 +86,28 @@ class LlamaChat:
 		'''
 
 		prompt = f'''
-			\rImagine you are an investor, and are deciding whether or not to buy {site.ticker} stock. 
-			\rYou decide to read a news article, and rank how certain you are that the stock will rise tomomrow on a scale from 1 to 10.
-			\rWhile you are reading, you ignore any information such as advertisements, and focus only on the part of the article that could impact the price
-			\rof {site.ticker} stock.
+			\rHere is a news article on {site.ticker} stock:
+			
+			\rTitle: {site.title}
 
-			\rPROVIDE ME WITH A RATING BETWEEN 1 AND 10. ONLY RETURN A NUMBER, AND NOTHING ELSE!
+			\rBody: {site.content}
 
-			\rArticle: {site.title}
+			\rStep 1: Read the article
+			\rStep 2: Ignore any parts of the article that do not provide insight into {site.ticker} stock (things like advertisements)
+			\rStep 2: Identify what parts of the article convey an opinion about the stocks.
+			\rStep 3: On a scale of 1-10, rate the average "sentiment" of those opinions
+			\rStep 4: Return the number (betwen 1-10) that you thought of. ONLY RETURN TO ME A NUMBER!
+			\rRemember: Sometimes the article may not talk about {site.ticker} stock, but may give information that could have impacts on the stock price. Try to use as much info as possible to rate the sentiment 1-10
+			\rNote: If there was not enough infomration in the article to obtain a "number", return me only the word "NONE", and nothing else
 
-			\r{site.content}
+			\rNow, follow these steps to derive the sentiment of {site.ticker} stock
 		'''
 		
 		try:
 			sentiment = int(self.prompt(prompt))
 		except ValueError as e:
 			return error_message('llm.py', f'Could not obtain sentiment for news article on {site.ticker}', e)
+		except Exception as e:
+			return error_message('llm.py', f'Unknown eror {site.ticker}', e)
 		
 		return sentiment
