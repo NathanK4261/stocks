@@ -8,6 +8,8 @@ import sqlite3
 
 from .errors import error_message
 
+from pandas import read_sql_query, DataFrame
+
 class DatabaseManager:
 	'''
 	# DatabaseManager
@@ -22,11 +24,17 @@ class DatabaseManager:
 		# Set up the cursor
 		self.cursor = self.conn.cursor()
 
+	def new_table(self):
+		'''
+		Creates a band new `stockdata` table formatted to work with other code
+		'''
+
 		# If a table for our stock data doesn't exist, create it now
 		self.cursor.execute('''
 			CREATE TABLE IF NOT EXISTS stockdata (
-				ticker TEXT,
+				id INTEGER PRIMARY KEY,
 				date TEXT,
+				ticker TEXT,
 				industry TEXT,
 				sector TEXT,
 				previousClose DOUBLE,
@@ -61,39 +69,68 @@ class DatabaseManager:
 				returnOnAssets DOUBLE,
 				returnOnEquity DOUBLE,
 				trailingPegRatio DOUBLE,
+				news BLOB,
 				sentiment DOUBLE,
-				UNIQUE(ticker, date)
+				UNIQUE(id, date, ticker)
 			)
 		''')
 
-		self.commit_all()
+		self.conn.commit()
 
 	def add_data(self, data: dict):
 		'''
-		Adds data for a specific ticker to the database
+		Adds data for a specific ticker to the `stockdata` table
 		'''
 
-		if len(data) != 37:
+		if len(data) != 38:
 			# Had to delcrate as "str" for documenation reasons
-			return str(error_message('datamanager.py', f'37 data points are required, {len(data)} {'were' if len(data) == 1 else 'was'} given'))
+			return str(error_message('datamanager.py', f'38 data points are required, {len(data)} {'were' if len(data) == 1 else 'was'} given'))
 
-		try:
-			# Iterate through the data stored in the dict
-			for datapoint in data:
-				
-				# Individually add each value to make sure they are assigned to correct columns
-				if type(datapoint) == str:
-					self.cursor.execute(f'INSERT INTO stockdata ({datapoint}) VALUES ("{data[datapoint]}")')
-				else:
-					self.cursor.execute(f'INSERT INTO stockdata ({datapoint}) VALUES ({data[datapoint]})')
+		try:	
+			#Add values to dataframe
+
+			columns = ', '.join(data.keys())
+			placeholders = ', '.join(['?'] * len(data))
+			values = list(data.values())
+
+			self.cursor.execute(
+				f'INSERT INTO stockdata ({columns}) VALUES ({placeholders})',
+				values
+			)
+
+			self.conn.commit()
 
 		except sqlite3.IntegrityError as e:
 			if 'UNIQUE' in str(e):
-				return str(error_message('database.py', 'Data already exists for given date', e))
+				return str(error_message('datamanager.py', 'Data already exists for given date', e))
 		except sqlite3.OperationalError as e:
-			return str(error_message('database.py', 'Error while adding stock data to database', e))
+			return str(error_message('datamanager.py', 'Error while adding stock data to database', e))
 		
-	def commit_all(self):
+	def to_pandas(self):
+		'''
+		Returns the `stockdata` table as a pdnas dataframe
+		'''
+		return read_sql_query('SELECT * FROM stockdata', self.conn)
+	
+	def pandas_to_database(self, dataframe: DataFrame):
+		'''
+		Takes the dataframe made from `DatabaseManager.to_pandas()` and converts it back into the `stockdata` table in the database
+		'''
+
+		# Reset and remove index
+		dataframe.reset_index(drop=True, inplace=True)
+
+		for _, row in dataframe.iterrows():
+			for column in dataframe.columns:
+				if column != 'id':
+					self.cursor.execute(
+                    	f'UPDATE stockdata SET {column} = ? WHERE id = ?;',
+                    	(row[column], row['id'])
+                	)
+
+					self.conn.commit()
+
+	def commit(self):
 		'''
 		Saves all changes to the database
 		'''
