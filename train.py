@@ -1,13 +1,19 @@
-import pandas as pd
+import modules.ml as ml
 
-from modules.ml import *
+import pandas as pd
+import numpy as np
 
 import torch
-from torch.utils.data import DataLoader
+import torch.utils.data
 
 import json
+
+# Load config
 with open('config.json') as f:
 	config = json.load(f)
+
+# Create variables for some config values
+best_training_loss = config['BEST_TRAINING_LOSS']
 
 # Select appropriate backend device
 device = (
@@ -16,63 +22,80 @@ device = (
     else 'cpu'
 )
 
-print(f"BACKEND: {device}")
-
-# Load our ML tools
-tools = MLTools(device=device)
-
-# Load our dataframe
-df = pd.read_pickle(f'stockdata/{config['TICKER']}/{config['TICKER']}.pkl')
-
-# Create our independent/dependent features
-X=df.drop(['date','move'],axis=1).values
-Y = df['move'].values.astype(float)
-
-# Split the data into train and test sets
-X_train, X_val, Y_train, Y_val = tools.load_training_dataset(X,Y)
-
-# Create dataloaders for training and testing
-train_dataloader = DataLoader(StockNetDataset(X_train, Y_train), batch_size=config['BATCH_SIZE'],shuffle=True)
-validation_dataloader = DataLoader(StockNetDataset(X_val, Y_val), batch_size=config['BATCH_SIZE'],shuffle=False)
+print(f'BACKEND: {device}')
 
 # Initialize our model
-model = tools.model
+try:
+	# Try and load a previous version
+	model = ml.StockNet().to(device)
+	model.load_state_dict(torch.load('StockNet/model',weights_only=True))
+except:
+	print('No StockNet model avaliable to load, skipping...')
+	model = ml.StockNet().to(device)
 
-# Initialize our loss function and optimizer
-loss_function = tools.loss_function
-optimizer = tools.optimizer
+# Initialize our loss function
+loss_func = torch.nn.MSELoss()
 
-# Float to compare average losses to the best loss recorded in config
-starting_best_training_loss = config['BEST_TRAINING_LOSS']
+# Initialize out optimizer
+try:
+	# Try and load a previous version
+	optimizer = torch.optim.Adam(model.parameters(), lr=config['LEARNING_RATE'])
+	optimizer.load_state_dict(torch.load('StockNet/optimizer',weights_only=True))
+except:
+	print('No StockNet optimizer avaliable to load, skipping...')
+	optimizer = torch.optim.Adam(model.parameters(), lr=config['LEARNING_RATE']) # Used to update the weights of the model
 
-# Float that will be updated and saved to config after training
-best_training_loss = config['BEST_TRAINING_LOSS']
+# Load training data
+stockdata = pd.read_csv('stockdata/training_data.csv')
 
-# Report which ticker is being used to train on
-print(f'Training on: {config['TICKER']}')
+# Split dataframe by ticker, than create list of datframes for each ticker
+stockdata_individual = list(stockdata.groupby('ticker'))
 
-# Report epochs and batch size
-print(f'Epochs: {config['EPOCHS']}')
-print(f'Batch size: {config['BATCH_SIZE']}')
+# Remove individual companies with insufficient data
+for data in stockdata_individual:
+	if len(data[1]) < 3:
+		stockdata_individual.remove(data)
 
-# Function that trains one epoch given the batch size
-def train_epoch():
-	for data in iter(train_dataloader):
-		# Every data instance is an input + move pair
-		inputs, moves = data
+# Initialize hidden and cell states
+hidden_state, cell_state = None, None
 
-		# Zero your gradients for every batch!
-		optimizer.zero_grad()
+# Iterate through each company, and formatdata into train and test dataloaders
+X, y = [], []
+for company_data in stockdata_individual:
 
-		# Make predictions for this batch
-		outputs = model(inputs)
+	# Seperate data into input and output
+	inp = company_data[1].drop(columns=['ticker','investmentDecision']).astype('float32').reset_index(drop=True)
+	out = company_data[1]['investmentDecision'].astype('float32').reset_index(drop=True)
 
-		# Compute the loss and its gradients
-		loss = loss_function(outputs, moves)
-		loss.backward()
+	# Create sequences of 2-day periods
+	for i in range(len(inp) - 2):
+		X.append(inp.iloc[i:(i+2)])
+		y.append(out.iloc[i+2])
 
-		# Adjust learning weights
-		optimizer.step()
+# Split into train/test sets (still keep chronological order)
+split_idx = int(len(X) * 0.7)
+X_train, X_test = np.array(X[:split_idx], dtype=np.float32), np.array(X[split_idx:], dtype=np.float32)
+y_train, y_test = np.array(y[:split_idx], dtype=np.float32), np.array(y[split_idx:], dtype=np.float32)
+
+# Convert into datasets (one of X_train and y_train, and one of X_test and y_test)
+train_dataloader = torch.utils.data.DataLoader(
+	ml.StockNetDataset(
+		torch.from_numpy(X_train).to(device),
+		torch.from_numpy(y_train).to(device)
+	),
+
+	batch_size=config['BATCH_SIZE'],
+	shuffle=True
+)
+
+test_dataloader = torch.utils.data.DataLoader(
+	ml.StockNetDataset(
+		torch.from_numpy(X_test).to(device),
+		torch.from_numpy(y_test).to(device)
+	),
+	batch_size=config['BATCH_SIZE'],
+	shuffle=True
+)
 
 # Main logic to train the neural network
 try:
@@ -81,7 +104,25 @@ try:
 		model.train()
 
 		# Do a pass over the data
-		train_epoch()
+		for data in iter(train_dataloader):
+			# Every data instance is an input + move pair
+			inputs, move = data
+
+			# Zero your gradients for every batch!
+			optimizer.zero_grad()
+
+			# Make predictions for this batch
+			outputs, hidden_state, cell_state = model(inputs, hidden_state, cell_state)
+
+			# Compute the loss and its gradients
+			loss = loss_func(outputs, move)
+			loss.backward()
+
+			# Adjust learning weights
+			optimizer.step()
+
+			# Detatch hidden and cell state to avoid gradient buildup
+			hidden_state, cell_state = hidden_state.detach(), cell_state.detach()
 
 		# Set the model to evaluation mode, disabling dropout and using population
 		# statistics for batch normalization.
@@ -89,27 +130,33 @@ try:
 
 		# Disable gradient computation and reduce memory consumption.
 		with torch.no_grad():
+			i = 0
 			vloss = 0
 
-			for i, vdata in enumerate(validation_dataloader):
+			for _, vdata in enumerate(test_dataloader):
 				vinputs, vmoves = vdata # Get inputs and moves from validation data
 
-				voutputs = model(vinputs)
+				voutputs, _, _ = model(vinputs)
 
-				vloss += loss_function(voutputs, vmoves)
+				vloss += loss_func(voutputs, vmoves)
 
-		# Average validation loss over all epochs
-		avg_loss = vloss / (i + 1)
+				i+=1
 
-		# Track best performance
-		if avg_loss.item() < best_training_loss:
-			best_training_loss = avg_loss.item()
+			# Average validation loss over all epochs
+			avg_loss = vloss / (i + 1)
 
-			# Save the model's state if its loss execeeds the lowest recorded loss in config
-			torch.save(model.state_dict(), f'StockNet/model')
+			# Track best performance
+			if avg_loss.item() < best_training_loss:
+				best_training_loss = avg_loss.item()
 
-			# Save the optimizer's state as well
-			torch.save(optimizer.state_dict(), 'StockNet/optimizer')
+				# Save the model's state if its loss execeeds the lowest recorded loss in config
+				torch.save(model.state_dict(), f'StockNet/model')
+
+				# Save the optimizer's state as well
+				torch.save(optimizer.state_dict(), 'StockNet/optimizer')
+
+				# Save the loss function's state as well
+				torch.save(loss_func.state_dict(), 'StockNet/loss')
 
 		# Print training progress
 		progress = round(epoch / config['EPOCHS'],2)
@@ -125,10 +172,13 @@ finally:
 	# Save data to config file
 	with open('config.json','w') as f:
 		# Save best training loss to config file
-		if best_training_loss > 0.1e-5:
-			config['BEST_TRAINING_LOSS'] = best_training_loss
-		else:
-			config['BEST_TRAINING_LOSS'] = 0.00001
+		try:
+			if best_training_loss > 0.1e-5:
+				config['BEST_TRAINING_LOSS'] = best_training_loss
+			else:
+				config['BEST_TRAINING_LOSS'] = 0.00001
+		except Exception as e:
+			print('Error while saving data - ', str(type(e)))
 
 		# Write new config to file
 		json.dump(config, f, indent = 4)
