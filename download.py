@@ -2,7 +2,6 @@ from modules.internet import YahooClient, NewsWebScraper, market_open
 import modules.tickers
 import modules.datamanager
 import modules.llm
-from modules.errors import error_message
 
 from datetime import datetime, date
 from time import sleep
@@ -48,6 +47,10 @@ def run_protocol(ticker: str):
 	'''
 	Collects data on the specified ticker, analyzes it, and saves it as a pandas dataframe
 	'''
+
+	# Check to se if data exists for that day
+	if db_manager.data_exists(set_date, ticker):
+		return True
 
 	# Get the daily market data
 	current_data = yahoo_client.current(ticker, set_date)
@@ -120,7 +123,7 @@ while (
 
 # If the market was not open today, do not run
 # Also, if there was a previous attempt, check if it is too early to attempt again
-if set_date != config['LAST_PROTOCOL_UPDATE'] and market_open():
+if set_date != config['LAST_PROTOCALL_UPDATE'] and market_open():
 
 	# Log when data collection starts
 	logger.warning(log_msg(f'START DATA COLLECTION ({len(modules.tickers.TICKERS)} Tickers)'))
@@ -155,7 +158,7 @@ if set_date != config['LAST_PROTOCOL_UPDATE'] and market_open():
 
 	# Save last update time in config, but only if "save_data" is set to "True"
 	with open('config.json', 'w') as f:
-		config['LAST_PROTOCOL_UPDATE'] = set_date
+		config['LAST_PROTOCALL_UPDATE'] = set_date
 
 		json.dump(config, f, indent=4)
 
