@@ -38,7 +38,7 @@ class DatabaseManager:
 				industry TEXT,
 				sector TEXT,
 				previousClose DOUBLE,
-				currentPrice DOUBLE,
+				regularMarketPrice DOUBLE,
 				open DOUBLE,
 				dayLow DOUBLE,
 				dayHigh DOUBLE,
@@ -48,8 +48,6 @@ class DatabaseManager:
 				volume DOUBLE,
 				averageVolume DOUBLE,
 				averageVolume10days DOUBLE,
-				bid DOUBLE,
-				ask DOUBLE,
 				marketCap DOUBLE,
 				fiftyTwoWeekLow DOUBLE,
 				fiftyTwoWeekHigh DOUBLE,
@@ -82,9 +80,9 @@ class DatabaseManager:
 		Adds data for a specific ticker to the `stockdata` table
 		'''
 
-		if len(data) != 38:
+		if len(data) != 36:
 			# Had to delcrate as "str" for documenation reasons
-			return str(error_message('datamanager.py', f'38 data points are required, {len(data)} {'were' if len(data) == 1 else 'was'} given'))
+			return str(error_message('datamanager.py', f'36 data points are required, {len(data)} {'were' if len(data) == 1 else 'was'} given', ValueError))
 
 		try:	
 			#Add values to dataframe
@@ -106,29 +104,19 @@ class DatabaseManager:
 		except sqlite3.OperationalError as e:
 			return str(error_message('datamanager.py', 'Error while adding stock data to database', e))
 		
+	def data_exists(self, date: str, ticker: str):
+		'''
+		Checks if data for a stock has been entered (for a specific day)
+		'''
+
+		# Query to check if the row exists
+		return self.cursor.execute('''SELECT 1 FROM stockdata WHERE date = ? AND ticker = ? LIMIT 1''', (date, ticker)).fetchone() is not None
+				
 	def to_pandas(self):
 		'''
-		Returns the `stockdata` table as a pdnas dataframe
+		Returns the `stockdata` table as a pandas dataframe
 		'''
 		return read_sql_query('SELECT * FROM stockdata', self.conn)
-	
-	def pandas_to_database(self, dataframe: DataFrame):
-		'''
-		Takes the dataframe made from `DatabaseManager.to_pandas()` and converts it back into the `stockdata` table in the database
-		'''
-
-		# Reset and remove index
-		dataframe.reset_index(drop=True, inplace=True)
-
-		for _, row in dataframe.iterrows():
-			for column in dataframe.columns:
-				if column != 'id':
-					self.cursor.execute(
-                    	f'UPDATE stockdata SET {column} = ? WHERE id = ?;',
-                    	(row[column], row['id'])
-                	)
-
-					self.conn.commit()
 
 	def commit(self):
 		'''
