@@ -1,95 +1,62 @@
-from torch.utils.data import Dataset
-from torch import Tensor, tensor, load, float32, long
-from torch.nn import LSTM, Linear, Module, MSELoss
-from torch.optim import SGD
+import json
+import pandas as pd
 
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 
-from pandas import DataFrame
-
-import json
+import torch
 
 # Open config
 with open('config.json') as f:
 	config = json.load(f)
 
-class MLTools:
-	'''
-	# MLTools
-
-	Class that allows you to properly intialize objects for machine learning on stock data
-	'''
-	def __init__(self, device: str = 'cpu', manual_init: bool = False):
-		if not manual_init:
-			# Create our model, loss function, and optimizer
-			self.model = self.snet(device).to(device)
-			self.loss_function = self.lfunc().to(device)
-			self.optimizer = self.optim()
-
-			# Create our scaler
-			self.scaler = StandardScaler()
-
-		# Set our device
-		self.device = device
-
-	def load_training_dataset(self, X: DataFrame, Y: DataFrame):
-		'''
-		Loads a dataset, splits it into training and validation sets, and standardizes it.
-
-		NOTE: Returns in order: X_train, X_val, Y_train, Y_val
-		'''
-		# Split the data into train and test sets
-		xt, xv, yt, yv = train_test_split(X, Y, test_size=0.2, shuffle=False)
-
-		# Standardize the data
-		xt = self.scaler.fit_transform(xt)
-		xv = self.scaler.transform(xv)
-
-		# Return tensors of the data
-		return tensor(xt, dtype=float32, device=self.device), tensor(xv, dtype=float32, device=self.device), tensor(yt, dtype=long, device=self.device), tensor(yv, dtype=long, device=self.device)
-
-	def snet(self, device):
-		try:
-			# Try and load a previous version of our model
-			_model = StockNet(device)
-			_model.load_state_dict(load('StockNet/model',weights_only=True))
-			return _model
-		except:
-			print('No StockNet model avaliable to load, skipping...')
-			return StockNet(device)
-		
-	def lfunc(self):
-		# Create loss function
-		return MSELoss() # Used to calculate loss for classification tasks (buy stock, sell stock, hold assets)
-
-	# Create optimizer
-	def optim(self):
-		try:
-			# Try and load a previous version of our model
-			_optimizer = SGD(self.model.parameters(), lr=config['LEARNING_RATE'], momentum=config['MOMENTUM'])
-			_optimizer.load_state_dict(load('StockNet/optimizer',weights_only=True))
-			return _optimizer
-		except:
-			print('No StockNet optimizer avaliable to load, skipping...')
-			return SGD(self.model.parameters(), lr=config['LEARNING_RATE'], momentum=config['MOMENTUM']) # Used to update the weights of the model
-
 # The neural network
-class StockNet(Module):
-	def __init__(self, device, input_size: int):
+class StockNet(torch.nn.Module):
+	'''
+	# StockNet
+
+	An LSTM neural network for predicting weather to buy/sell a stock
+	'''
+	def __init__(self):
 		super(StockNet, self).__init__()
 
-		self.lstm = LSTM(input_size=input_size, hidden_size=50, num_layers=2, batch_first=True, device=device)
-		self.linear = Linear(50, 2, device=device)
+		self.lstm = torch.nn.LSTM(input_size=31, hidden_size=50, num_layers=2, batch_first=True)
+		self.linear = torch.nn.Linear(
+			50, # input dimensions
+			1 # output dimension(s)
+		)
 
-	def forward(self, x):
-		x, _ = self.lstm(x)
-		x = self.linear(x)
-		return x
+	def forward(self, x, hidden_state=None, cell_state=None):
+		'''
+		Method for runinng one "forward pass" of the model
+
+		- `hidden_state` = The models "short term memory" (what it is using to make an immediate prediction)
+		- `cell_state` = The models "long term memory" (important information used for making predictions)
+		'''
+		if hidden_state is None or cell_state is None:
+
+			# Create blank hidden state
+			hidden_state = torch.zeros(
+				2, # num_layers
+				x.size(0),
+				50 # hidden_size
+			).to(x.device)
+			
+			# Create blank cell state
+			cell_state = torch.zeros(
+				2, # num_layers
+				x.size(0),
+				50 # hidden_size
+			).to(x.device)
+
+		# Outputs (out = ALL hidden states) (hs = new hidden state) (cs = new cell state)
+		out, (hs, cs) = self.lstm(x, (hidden_state, cell_state))
+
+		out = self.linear(out[:, -1, :]) # Take last time step
+		return out, hs, cs
 
 # Create a custom Dataset() class
-class StockNetDataset(Dataset):
-	def __init__(self, x: Tensor, y: Tensor):
+class StockNetDataset(torch.utils.data.Dataset):
+	def __init__(self, x: torch.Tensor, y: torch.Tensor):
 		self.x = x
 		self.y = y
 
@@ -97,5 +64,4 @@ class StockNetDataset(Dataset):
 		return len(self.y)
 	
 	def __getitem__(self, index):
-		return self.x[index], self.y[index]
-	
+		return self.x[index], self.y[index].unsqueeze(-1)
