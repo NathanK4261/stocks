@@ -113,10 +113,13 @@ MAIN CODE STARTS HERE
 #########################
 '''
 
+# Log when protocoll begins
+logger.warning(log_msg('BOOT'))
+
 # Start only if market has been closed for an hour (since we want todays data as well)
 while (
 	datetime.now(pytz.timezone('US/Eastern')).hour > 9 and 
-	datetime.now(pytz.timezone('US/Eastern')).hour <= 17
+	datetime.now(pytz.timezone('US/Eastern')).hour <= 14
 ):
 	pass
 
@@ -127,28 +130,29 @@ if set_date != config['LAST_PROTOCALL_UPDATE'] and market_open():
 
 	# Log when data collection starts
 	logger.warning(log_msg(f'START DATA COLLECTION ({len(modules.tickers.TICKERS)} Tickers)'))
+	completed = 0
 
 	# Iterate through every ticker
 	for ticker in modules.tickers.TICKERS:
 
 		# Collect data for specific ticker
-		protocol_complete = run_protocol(ticker)
+		while True:
+			try:
+				protocol_complete = run_protocol(ticker)
 
-		if protocol_complete:
-			logger.warning(log_msg(f'{ticker.upper()} - SUCCESS'))
+				if protocol_complete:
+					completed += 1
+					logger.warning(log_msg(f'{ticker.upper()} - SUCCESS ({completed}/{len(modules.tickers.TICKERS)})'))
+					break
 
-		else:
-			logger.warning(log_msg(f'{ticker.upper()} - FAIL'))
+				else:
+					logger.warning(log_msg(f'{ticker.upper()} - FAIL'))
 
-			# Sleep for 2 minutes and try again
-			sleep(120)
-
-			protocol_complete = run_protocol(ticker)
-
-			if protocol_complete:
-				logger.warning(log_msg(f'{ticker.upper()} - SUCCESS'))
-			else:
-				logger.warning(log_msg(f'{ticker.upper()} - FAIL x2'))
+					# Sleep for 30 minutes and try again
+					sleep(1800)
+			except KeyboardInterrupt:
+				logger.warning('KeyboardInterrupt')
+				exit()
 
 	# Log when data collection ends
 	logger.warning(log_msg('DATA COLLECTED'))
