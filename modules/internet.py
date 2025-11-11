@@ -7,7 +7,7 @@ import pandas_market_calendars as mcal
 import yfinance as yf
 from yfinance.exceptions import YFRateLimitError
 
-from datetime import date, datetime, timezone
+from datetime import date
 
 from . import valuations
 from .errors import error_message
