@@ -55,7 +55,7 @@ class StockNet(torch.nn.Module):
 
 		out = self.linear(out[:, -1, :]) # Take last time step
 
-		# Use sigmoid function to return a value 0 or 1
+		# Use sigmoid function
 		out = torch.sigmoid(out)
 
 		return out, hs, cs
@@ -84,13 +84,16 @@ def StockNet_prediction(ticker: str, device: str):
 		return False
 
 	# Get only input data for StockNet
-	inp = training_data.loc[training_data['ticker'] == ticker.upper()].drop(['ticker'], axis=1).astype('float32').reset_index(drop=True)
+	inp = training_data.loc[training_data['ticker'] == ticker].drop(['ticker'], axis=1).astype('float32').reset_index(drop=True)
 
 	# Obtain the last 2 days data for the particular stock, and convert into a pytorch tensor
 	last_2_days = inp.iloc[len(inp)-2:]
 	X, y = [], []
-	y.append(last_2_days['investmentDecision'])
 	X.append(last_2_days.drop('investmentDecision', axis=1))
+	y.append(last_2_days['investmentDecision'])
+
+	X = array(X)
+	y = array(y)
 
 	# Create dataloader of data from the last 2 days
 	dataloader = torch.utils.data.DataLoader(
