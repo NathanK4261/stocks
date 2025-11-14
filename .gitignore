@@ -7,16 +7,20 @@
 /pages
 /Dashboard.py
 
+# Misc. data
 /misc/.DS_Store
 /misc/boot_dashboard.sh
 /misc/boot_protocol.sh
 /misc/com.nathankeidel.dashboard.plist
 /misc/com.nathankeidel.protocol.plist
 
+# Modules unwanted data
 /modules/__pycache__
 
+# Stockdata
 /stockdata/.DS_Store
 /stockdata/*
 
+# Logs
 /logs/.DS_Store
 /logs/*
