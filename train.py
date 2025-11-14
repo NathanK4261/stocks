@@ -33,10 +33,7 @@ except:
 	print('No StockNet model avaliable to load, skipping...')
 	model = ml.StockNet().to(device)
 
-# Initialize our loss function
-loss_func = torch.nn.MSELoss()
-
-# Initialize out optimizer
+# Initialize our optimizer
 try:
 	# Try and load a previous version
 	optimizer = torch.optim.Adam(model.parameters(), lr=config['LEARNING_RATE'])
@@ -45,10 +42,13 @@ except:
 	print('No StockNet optimizer avaliable to load, skipping...')
 	optimizer = torch.optim.Adam(model.parameters(), lr=config['LEARNING_RATE']) # Used to update the weights of the model
 
+# Initialize our loss function
+loss_func = torch.nn.MSELoss()
+
 # Load training data
 stockdata = pd.read_csv('stockdata/training_data.csv')
 
-# Split dataframe by ticker, than create list of datframes for each ticker
+# Group dataframe by ticker, than create list of datframes for each ticker
 stockdata_individual = list(stockdata.groupby('ticker'))
 
 # Remove individual companies with insufficient data
@@ -56,10 +56,13 @@ for data in stockdata_individual:
 	if len(data[1]) < 3:
 		stockdata_individual.remove(data)
 
+	# Remove last row of data, as it is not usefull
+	data[1].drop(data[1].index[-1])
+
 # Initialize hidden and cell states
 hidden_state, cell_state = None, None
 
-# Iterate through each company, and formatdata into train and test dataloaders
+# Iterate through each company, and format data into input and output lists
 X, y = [], []
 for company_data in stockdata_individual:
 
@@ -70,12 +73,16 @@ for company_data in stockdata_individual:
 	# Create sequences of 2-day periods
 	for i in range(len(inp) - 2):
 		X.append(inp.iloc[i:(i+2)])
-		y.append(out.iloc[i+2])
+		y.append(out.iloc[i+1])
+
+# Convert input and output lists into numpy arrays
+X = np.array(X)
+y = np.array(y)
 
 # Split into train/test sets (still keep chronological order)
-split_idx = int(len(X) * 0.7)
-X_train, X_test = np.array(X[:split_idx], dtype=np.float32), np.array(X[split_idx:], dtype=np.float32)
-y_train, y_test = np.array(y[:split_idx], dtype=np.float32), np.array(y[split_idx:], dtype=np.float32)
+split_idx = int(len(X) * 0.6)
+X_train, X_test = X[:split_idx], X[split_idx:]
+y_train, y_test = y[:split_idx], y[split_idx:]
 
 # Convert into datasets (one of X_train and y_train, and one of X_test and y_test)
 train_dataloader = torch.utils.data.DataLoader(
@@ -154,9 +161,6 @@ try:
 
 				# Save the optimizer's state as well
 				torch.save(optimizer.state_dict(), 'StockNet/optimizer')
-
-				# Save the loss function's state as well
-				torch.save(loss_func.state_dict(), 'StockNet/loss')
 
 		# Print training progress
 		progress = round(epoch / config['EPOCHS'],2)
