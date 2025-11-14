@@ -42,10 +42,10 @@ for ticker in tickers:
 	for col in df:
 
 		# Insert data into the "descision" column
-		df['investmentDecision'] = (df['regularMarketPrice'] > df['previousClose']).astype(int)
+		df['investmentDecision'] = (df['regularMarketPrice'] < df['regularMarketPrice'].shift(-1)).astype(int)
 		
 		# Interpolate data
-		if df[col].dtype == 'float64':
+		if df[col].dtype == 'float64' and col != 'investmentDecision':
 			df[col] = df[col].interpolate(method='linear')
 
 			# Normalize data using scaler
