@@ -1,15 +1,4 @@
-import json
-import pandas as pd
-
-from sklearn.preprocessing import StandardScaler
-
 import torch
-
-from numpy import array
-
-# Open config
-with open('config.json') as f:
-	config = json.load(f)
 
 # The neural network
 class StockNet(torch.nn.Module):
@@ -55,9 +44,6 @@ class StockNet(torch.nn.Module):
 
 		out = self.linear(out[:, -1, :]) # Take last time step
 
-		# Use sigmoid function
-		out = torch.sigmoid(out)
-
 		return out, hs, cs
 
 # Create a custom Dataset() class
@@ -71,57 +57,3 @@ class StockNetDataset(torch.utils.data.Dataset):
 	
 	def __getitem__(self, index):
 		return self.x[index], self.y[index].unsqueeze(-1)
-	
-def StockNet_prediction(ticker: str, device: str):
-	'''
-	Uses `StockNet` to make a prediction about a specific stock
-	'''
-
-	# Load training data
-	try:
-		training_data = pd.read_csv('stockdata/training_data.csv')
-	except FileNotFoundError:
-		return False
-
-	# Get only input data for StockNet
-	inp = training_data.loc[training_data['ticker'] == ticker].drop(['ticker'], axis=1).astype('float32').reset_index(drop=True)
-
-	# Obtain the last 2 days data for the particular stock, and convert into a pytorch tensor
-	last_2_days = inp.iloc[len(inp)-2:]
-	X, y = [], []
-	X.append(last_2_days.drop('investmentDecision', axis=1))
-	y.append(last_2_days['investmentDecision'])
-
-	X = array(X)
-	y = array(y)
-
-	# Create dataloader of data from the last 2 days
-	dataloader = torch.utils.data.DataLoader(
-		StockNetDataset(
-			torch.from_numpy(array(X)).to(device),
-			torch.from_numpy(array(y)).to(device)
-		)
-	)
-
-	# Load StockNet
-	try:
-		# Try and load a previous version
-		model = StockNet().to(device)
-		model.load_state_dict(torch.load('StockNet/model',weights_only=True))
-	except:
-		print('No StockNet model avaliable to load, skipping...')
-		model = StockNet().to(device)
-
-	# Run prediction on our data
-	model.eval()
-
-	# Disable gradient computation and reduce memory consumption.
-	with torch.no_grad():
-		for _, data in enumerate(dataloader):
-			inputs, move = data
-			output, _, _ = model(inputs)
-
-	# Convert raw logit to probability and prediction
-	prediction = output.item()
-
-	return prediction
