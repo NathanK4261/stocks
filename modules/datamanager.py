@@ -117,6 +117,15 @@ class DatabaseManager:
 		Returns the `stockdata` table as a pandas dataframe
 		'''
 		return read_sql_query('SELECT * FROM stockdata', self.conn)
+	
+	def return_tickers(self):
+		'''
+		Returns a list of every ticker in the database
+		'''
+
+		df = read_sql_query('SELECT * FROM stockdata', self.conn)
+		
+		return list(df['ticker'].unique())
 
 	def commit(self):
 		'''
