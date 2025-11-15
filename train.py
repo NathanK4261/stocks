@@ -43,7 +43,7 @@ except:
 	optimizer = torch.optim.Adam(model.parameters(), lr=config['LEARNING_RATE']) # Used to update the weights of the model
 
 # Initialize our loss function
-loss_func = torch.nn.MSELoss()
+loss_func = torch.nn.BCEWithLogitsLoss()
 
 # Load training data
 stockdata = pd.read_csv('stockdata/training_data.csv')
@@ -51,12 +51,13 @@ stockdata = pd.read_csv('stockdata/training_data.csv')
 # Group dataframe by ticker, than create list of datframes for each ticker
 stockdata_individual = list(stockdata.groupby('ticker'))
 
-# Remove individual companies with insufficient data
 for data in stockdata_individual:
+
+	# Remove companies with insufficient data
 	if len(data[1]) < 3:
 		stockdata_individual.remove(data)
 
-	# Remove last row of data, as it is not usefull
+	# Remove last row of every companies data, as it is not usefull
 	data[1].drop(data[1].index[-1])
 
 # Initialize hidden and cell states
@@ -84,7 +85,7 @@ split_idx = int(len(X) * 0.6)
 X_train, X_test = X[:split_idx], X[split_idx:]
 y_train, y_test = y[:split_idx], y[split_idx:]
 
-# Convert into datasets (one of X_train and y_train, and one of X_test and y_test)
+# Convert into dataloaders (for model training)
 train_dataloader = torch.utils.data.DataLoader(
 	ml.StockNetDataset(
 		torch.from_numpy(X_train).to(device),
