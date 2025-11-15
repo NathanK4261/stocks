@@ -33,23 +33,24 @@ for ticker in tickers:
 	# Pull data for specific ticker
 	df = stockdata.loc[stockdata['ticker'] == ticker]
 
-	# Forward fill data if none exists (use last data point)
-	df = df.ffill()
+	# Insert data into the "descision" column
+	df['investmentDecision'] = (df['regularMarketPrice'] < df['regularMarketPrice'].shift(-1)).astype(int)
 
-	# Zero fill data (if no data exists)
-	df = df.fillna(0)
+	# Process numeric columns individually
+	for col in df.select_dtypes(include=['float64']).columns:
 
-	for col in df:
+		# Skip label column
+		if col == 'investmentDecision':
+			continue
 
-		# Insert data into the "descision" column
-		df['investmentDecision'] = (df['regularMarketPrice'] < df['regularMarketPrice'].shift(-1)).astype(int)
-		
-		# Interpolate data
-		if df[col].dtype == 'float64' and col != 'investmentDecision':
-			df[col] = df[col].interpolate(method='linear')
+		# Fix missing data
+		df[col] = df[col].interpolate(method='linear')
+		df[col] = df[col].ffill()
+		df[col] = df[col].fillna(0)
 
-			# Normalize data using scaler
-			df[col] = scaler.fit_transform(df[[col]])
+		# Scale this specific column with its own scaler
+		scaler = StandardScaler()
+		df[col] = scaler.fit_transform(df[[col]])
 
 	# Move the formatted data back into the main dataframe
 	stockdata.loc[stockdata['ticker'] == ticker, :] = df
