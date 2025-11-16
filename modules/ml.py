@@ -10,41 +10,24 @@ class StockNet(torch.nn.Module):
 	def __init__(self):
 		super(StockNet, self).__init__()
 
-		self.lstm = torch.nn.LSTM(input_size=31, hidden_size=50, num_layers=2, batch_first=True)
+		self.lstm = torch.nn.LSTM(input_size=31, hidden_size=30, num_layers=1, batch_first=True)
 		self.linear = torch.nn.Linear(
-			50, # input dimensions
+			30, # input dimensions
 			1 # output dimension(s)
 		)
 
-	def forward(self, x, hidden_state=None, cell_state=None):
+	def forward(self, x):
 		'''
 		Method for runinng one "forward pass" of the model
-
-		- `hidden_state` = The models "short term memory" (what it is using to make an immediate prediction)
-		- `cell_state` = The models "long term memory" (important information used for making predictions)
 		'''
-		if hidden_state is None or cell_state is None:
-
-			# Create blank hidden state
-			hidden_state = torch.zeros(
-				2, # num_layers
-				x.size(0),
-				50 # hidden_size
-			).to(x.device)
-			
-			# Create blank cell state
-			cell_state = torch.zeros(
-				2, # num_layers
-				x.size(0),
-				50 # hidden_size
-			).to(x.device)
 
 		# Outputs (out = ALL hidden states) (hs = new hidden state) (cs = new cell state)
-		out, (hs, cs) = self.lstm(x, (hidden_state, cell_state))
+		out, _ = self.lstm(x)
 
-		out = self.linear(out[:, -1, :]) # Take last time step
+		# Get the last output
+		last = out[:, -1, :]
 
-		return out, hs, cs
+		return self.linear(last)
 
 # Create a custom Dataset() class
 class StockNetDataset(torch.utils.data.Dataset):
@@ -56,4 +39,4 @@ class StockNetDataset(torch.utils.data.Dataset):
 		return len(self.y)
 	
 	def __getitem__(self, index):
-		return self.x[index], self.y[index].unsqueeze(-1)
+		return self.x[index], self.y[index]
