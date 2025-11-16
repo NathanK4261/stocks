@@ -8,12 +8,11 @@ import torch.utils.data
 
 import json
 
+from tqdm import tqdm
+
 # Load config
 with open('config.json') as f:
 	config = json.load(f)
-
-# Create variables for some config values
-best_training_loss = config['BEST_TRAINING_LOSS']
 
 # Select appropriate backend device
 device = (
@@ -51,36 +50,35 @@ stockdata = pd.read_csv('stockdata/training_data.csv')
 # Group dataframe by ticker, than create list of datframes for each ticker
 stockdata_individual = list(stockdata.groupby('ticker'))
 
-for data in stockdata_individual:
-
+# Format data
+for _, data in stockdata_individual:
 	# Remove companies with insufficient data
-	if len(data[1]) < 3:
-		stockdata_individual.remove(data)
+	if len(data) < config['LSTM_WINDOW_SIZE'] + 1:
+		stockdata_individual.remove((_, data))
 
 	# Remove last row of every companies data, as it is not usefull
-	data[1].drop(data[1].index[-1])
+	data.drop(data.tail(1).index, inplace=True)
 
-# Initialize hidden and cell states
-hidden_state, cell_state = None, None
-
-# Iterate through each company, and format data into input and output lists
+# Iterate through each company, and format data into one (new) big dataframe
 X, y = [], []
-for company_data in stockdata_individual:
-
+for _, company_data in stockdata_individual:
 	# Seperate data into input and output
-	inp = company_data[1].drop(columns=['ticker','investmentDecision']).astype('float32').reset_index(drop=True)
-	out = company_data[1]['investmentDecision'].astype('float32').reset_index(drop=True)
+	inp = company_data.drop(columns=['ticker','investmentDecision']).astype('float32').reset_index(drop=True)
+	out = company_data['investmentDecision'].astype('float32').reset_index(drop=True)
 
 	# Create sequences of 2-day periods
-	for i in range(len(inp) - 2):
-		X.append(inp.iloc[i:(i+2)])
-		y.append(out.iloc[i+1])
+	for i in range(len(inp) - config['LSTM_WINDOW_SIZE']):
+
+		X.append(inp.iloc[i:(i+config['LSTM_WINDOW_SIZE'])])
+
+		# Add "[[]]" to make the output array 2D
+		y.append([ out.iloc[i+config['LSTM_WINDOW_SIZE'] - 1] ])
 
 # Convert input and output lists into numpy arrays
 X = np.array(X)
 y = np.array(y)
 
-# Split into train/test sets (still keep chronological order)
+# Split into train/test sets
 split_idx = int(len(X) * 0.6)
 X_train, X_test = X[:split_idx], X[split_idx:]
 y_train, y_test = y[:split_idx], y[split_idx:]
@@ -88,8 +86,8 @@ y_train, y_test = y[:split_idx], y[split_idx:]
 # Convert into dataloaders (for model training)
 train_dataloader = torch.utils.data.DataLoader(
 	ml.StockNetDataset(
-		torch.from_numpy(X_train).to(device),
-		torch.from_numpy(y_train).to(device)
+		torch.from_numpy(X_train),
+		torch.from_numpy(y_train)
 	),
 
 	batch_size=config['BATCH_SIZE'],
@@ -98,39 +96,40 @@ train_dataloader = torch.utils.data.DataLoader(
 
 test_dataloader = torch.utils.data.DataLoader(
 	ml.StockNetDataset(
-		torch.from_numpy(X_test).to(device),
-		torch.from_numpy(y_test).to(device)
+		torch.from_numpy(X_test),
+		torch.from_numpy(y_test)
 	),
 	batch_size=config['BATCH_SIZE'],
 	shuffle=True
 )
 
+# Create variables for some config values
+best_training_loss = config['BEST_TRAINING_LOSS']
+
 # Main logic to train the neural network
 try:
-	for epoch in range(config['EPOCHS']):
+	for epoch in tqdm(range(config['EPOCHS']), desc='Training Progress', unit='Epochs'):
 		# Make sure gradient tracking is on
 		model.train()
 
 		# Do a pass over the data
-		for data in iter(train_dataloader):
-			# Every data instance is an input + move pair
-			inputs, move = data
+		for inputs, moves in iter(train_dataloader):
+
+			# Assign only the current batch to our device to save on memory
+			inputs, moves = inputs.to(device), moves.to(device)
 
 			# Zero your gradients for every batch!
 			optimizer.zero_grad()
 
 			# Make predictions for this batch
-			outputs, hidden_state, cell_state = model(inputs, hidden_state, cell_state)
+			outputs = model(inputs)
 
 			# Compute the loss and its gradients
-			loss = loss_func(outputs, move)
+			loss = loss_func(outputs, moves)
 			loss.backward()
 
 			# Adjust learning weights
 			optimizer.step()
-
-			# Detatch hidden and cell state to avoid gradient buildup
-			hidden_state, cell_state = hidden_state.detach(), cell_state.detach()
 
 		# Set the model to evaluation mode, disabling dropout and using population
 		# statistics for batch normalization.
@@ -138,20 +137,19 @@ try:
 
 		# Disable gradient computation and reduce memory consumption.
 		with torch.no_grad():
-			i = 0
 			vloss = 0
 
-			for _, vdata in enumerate(test_dataloader):
-				vinputs, vmoves = vdata # Get inputs and moves from validation data
+			for vinputs, vmoves in iter(test_dataloader):
+				
+				# Assign only the current batch to our device to save on memory
+				vinputs, vmoves = vinputs.to(device), vmoves.to(device)
 
-				voutputs, _, _ = model(vinputs)
+				voutputs = model(vinputs)
 
 				vloss += loss_func(voutputs, vmoves)
 
-				i+=1
-
 			# Average validation loss over all epochs
-			avg_loss = vloss / (i + 1)
+			avg_loss = vloss / len(test_dataloader)
 
 			# Track best performance
 			if avg_loss.item() < best_training_loss:
@@ -163,15 +161,11 @@ try:
 				# Save the optimizer's state as well
 				torch.save(optimizer.state_dict(), 'StockNet/optimizer')
 
-		# Print training progress
-		progress = round(epoch / config['EPOCHS'],2)
-		print(f' Epoch: {epoch}/{config['EPOCHS']} ({int(100*progress)}%){' '*10}Avg. Loss: {round(avg_loss.item(),3)}{' '*10}Best Loss: {round(best_training_loss,3)}    ',end='\r')
-		
+		#print(f'EPOCH [{epoch}/{config['EPOCHS']}] * Avg. Loss: {"{:.2f}".format(avg_loss.item())} * Best Loss: {"{:.2f}".format(best_training_loss)}\t')
 except KeyboardInterrupt:
 	pass
 finally:
 	# Print improvement
-	print(' '*100,end='\r')
 	print(f'Improvement: {round(config['BEST_TRAINING_LOSS'] - best_training_loss, 3)} (Start: {round(config['BEST_TRAINING_LOSS'],3)})')
 	
 	# Save data to config file
