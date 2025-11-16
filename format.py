@@ -10,8 +10,8 @@ import pandas as pd
 pd.options.mode.chained_assignment = None
 pd.set_option('future.no_silent_downcasting', True)
 
-# Initialize scaler
-scaler = StandardScaler()
+# StandardScaler
+scaler = None
 
 # Load "stockdata" table into pandas dataframe
 db_man = DatabaseManager()
@@ -37,10 +37,10 @@ for ticker in tickers:
 	df['investmentDecision'] = (df['regularMarketPrice'] < df['regularMarketPrice'].shift(-1)).astype(int)
 
 	# Process numeric columns individually
-	for col in df.select_dtypes(include=['float64']).columns:
+	for col in df.columns:
 
 		# Skip label column
-		if col == 'investmentDecision':
+		if col == 'investmentDecision' or col == 'ticker':
 			continue
 
 		# Fix missing data
@@ -48,9 +48,20 @@ for ticker in tickers:
 		df[col] = df[col].ffill()
 		df[col] = df[col].fillna(0)
 
-		# Scale this specific column with its own scaler
-		scaler = StandardScaler()
-		df[col] = scaler.fit_transform(df[[col]])
+	# Re-initialize scaler
+	scaler = StandardScaler()
+
+	# Remove columns that do not need to be standardized
+	df_scaler = df.drop(['ticker', 'investmentDecision'], axis=1)
+
+	# Standardize data
+	df_transformed = scaler.fit_transform(df_scaler)
+
+	# Turn numpy array from scaler back into pandas dataframe
+	df_processed = pd.DataFrame(data=df_transformed, index=df_scaler.index, columns=df_scaler.columns)
+
+	# Copy data back into df
+	df.update(df_processed)
 
 	# Move the formatted data back into the main dataframe
 	stockdata.loc[stockdata['ticker'] == ticker, :] = df
