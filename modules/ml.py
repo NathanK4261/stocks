@@ -11,6 +11,7 @@ class StockNet(torch.nn.Module):
 		super(StockNet, self).__init__()
 
 		self.lstm = torch.nn.LSTM(input_size=31, hidden_size=30, num_layers=1, batch_first=True)
+		
 		self.linear = torch.nn.Linear(
 			30, # input dimensions
 			1 # output dimension(s)

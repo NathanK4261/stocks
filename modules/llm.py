@@ -5,26 +5,7 @@ import ollama
 from httpx import ConnectError
 
 from .internet import NewsWebPage
-from .errors import error_message
-
-class LlamaPrompt:
-	'''
-	Stores information on specific prompts
-	'''
-	def __init__(self, model: str, prompt: str, response: str):
-		self.timestamp = { # Stores the exact data and time captured (with timezone)
-			'YEAR':datetime.now().year,
-			'MONTH':datetime.now().month,
-			'DAY':datetime.now().day,
-			'HOUR':datetime.now().hour,
-			'MINUTE':datetime.now().minute,
-			'SECOND':datetime.now().second
-		}
-		self.timestamp['DATE_FORMATTED'] = f'{datetime.now().year}-{datetime.now().month}-{datetime.now().day} ({self.timestamp['HOUR']}:{self.timestamp['MINUTE']}:{self.timestamp['SECOND']})'
-
-		self.model = model # The model used in the prompt
-		self.prompt = prompt # The prompt the user provided
-		self.response = response # The response from the LLM
+from . import errors
 
 
 class LlamaChat:
@@ -32,35 +13,42 @@ class LlamaChat:
 	# LlamaChat
 	Used to access and talk to ollama LLM's in python
 	'''
-	def __init__(self, model: str = 'llama3.3:70b', prompting: bool = False):
-		# Create a boolean to enable/disable llama prompting
-		self.prompting = prompting
+	def __init__(self, model: str = 'llama3.3:70b'):
 
+		# Check to see if the requested model is downloaded
 		models = []
 		try:
 			for ollama_model in ollama.list()['models']:
 				models.append(ollama_model.model)
-		except ConnectError:
-			print('Error connecting to ollama servers')
-			exit(1)
+
+		except ConnectError as e:
+			raise errors.error('llm.py','Error connecting to ollama servers', e)
 
 		if model in models:
 			self.model = model
+
 		else:
+
+			# If the model is not downloaded, prompt user to download it
 			while True:
 				choice = input(f'Model "{model}" has not been downloaded\nDownload? [y/n] ')
 
 				if choice.lower() == 'y':
+
 					print('Downloading...')
+
 					try:
 						ollama.pull(model)
-					except KeyboardInterrupt:
-						exit(0)
+					except KeyboardInterrupt as e:
+						raise errors.error('llm.py', 'User cancelled model download', e)
+					
 					print('Added model:',model)
+
 					self.model = model
 					break
-				else:
-					quit(1)
+
+				elif choice.lower() == 'n':
+					raise errors.error('llm.py','User declined model download',)
 
 	def prompt(self, message: str):
 		'''
@@ -75,10 +63,7 @@ class LlamaChat:
 		)
 
 		# Return the message
-		if self.prompting:
-			return str(response['message']['content']), LlamaPrompt(self.model,message,response['message']['content'])
-		else:
-			return str(response['message']['content'])
+		return str(response['message']['content'])
 		
 	def news_prompt(self, site: NewsWebPage):
 		'''
@@ -105,9 +90,10 @@ class LlamaChat:
 		
 		try:
 			sentiment = int(self.prompt(prompt))
+		
 		except ValueError as e:
-			return error_message('llm.py', f'Could not obtain sentiment for news article on {site.ticker}', e)
+			raise errors.error('llm.py', f'Could not obtain sentiment for news article on {site.ticker}', e)
 		except Exception as e:
-			return error_message('llm.py', f'Unknown eror {site.ticker}', e)
+			raise errors.error('llm.py', f'Unknown error while obtaining sentiment on {site.ticker}', e)
 		
 		return sentiment

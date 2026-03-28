@@ -17,10 +17,6 @@ conda install tqdm -y
 pip install --upgrade ollama
 pip install --upgrade yfinance
 pip install --upgrade pandas-market-calendars
-pip install --upgrade streamlit
-pip install --upgrade streamlit-scrollable-textbox
-pip install --upgrade plotly
-pip install --upgrade Authlib
 conda clean -a -y
 
 # Create directories needed for program(s)

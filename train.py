@@ -1,13 +1,8 @@
-import modules.ml as ml
-
-import pandas as pd
-import numpy as np
+import modules.ml
+import modules.datamanager
 
 import torch
-import torch.utils.data
-
 import json
-
 from tqdm import tqdm
 
 # Load config
@@ -26,82 +21,29 @@ print(f'BACKEND: {device}')
 # Initialize our model
 try:
 	# Try and load a previous version
-	model = ml.StockNet().to(device)
+	model = modules.ml.StockNet().to(device)
 	model.load_state_dict(torch.load('StockNet/model',weights_only=True))
 except:
 	print('No StockNet model avaliable to load, skipping...')
-	model = ml.StockNet().to(device)
+	model = modules.ml.StockNet().to(device)
 
 # Initialize our optimizer
 try:
 	# Try and load a previous version
-	optimizer = torch.optim.Adam(model.parameters(), lr=config['LEARNING_RATE'])
+	optimizer = torch.optim.AdamW(model.parameters(), lr=config['LEARNING_RATE'])
 	optimizer.load_state_dict(torch.load('StockNet/optimizer',weights_only=True))
 except:
 	print('No StockNet optimizer avaliable to load, skipping...')
-	optimizer = torch.optim.Adam(model.parameters(), lr=config['LEARNING_RATE']) # Used to update the weights of the model
+	optimizer = torch.optim.AdamW(model.parameters(), lr=config['LEARNING_RATE']) # Used to update the weights of the model
 
 # Initialize our loss function
-loss_func = torch.nn.BCEWithLogitsLoss()
+loss_func = torch.nn.HuberLoss()
 
 # Load training data
-stockdata = pd.read_csv('stockdata/training_data.csv')
+stock_data_manager = modules.datamanager.StockDataManager()
 
-# Group dataframe by ticker, than create list of datframes for each ticker
-stockdata_individual = list(stockdata.groupby('ticker'))
-
-# Format data
-for _, data in stockdata_individual:
-	# Remove companies with insufficient data
-	if len(data) < config['LSTM_WINDOW_SIZE'] + 1:
-		stockdata_individual.remove((_, data))
-
-	# Remove last row of every companies data, as it is not usefull
-	data.drop(data.tail(1).index, inplace=True)
-
-# Iterate through each company, and format data into one (new) big dataframe
-X, y = [], []
-for _, company_data in stockdata_individual:
-	# Seperate data into input and output
-	inp = company_data.drop(columns=['ticker','investmentDecision']).astype('float32').reset_index(drop=True)
-	out = company_data['investmentDecision'].astype('float32').reset_index(drop=True)
-
-	# Create sequences of 2-day periods
-	for i in range(len(inp) - config['LSTM_WINDOW_SIZE']):
-
-		X.append(inp.iloc[i:(i+config['LSTM_WINDOW_SIZE'])])
-
-		# Add "[[]]" to make the output array 2D
-		y.append([ out.iloc[i+config['LSTM_WINDOW_SIZE'] - 1] ])
-
-# Convert input and output lists into numpy arrays
-X = np.array(X)
-y = np.array(y)
-
-# Split into train/test sets
-split_idx = int(len(X) * 0.6)
-X_train, X_test = X[:split_idx], X[split_idx:]
-y_train, y_test = y[:split_idx], y[split_idx:]
-
-# Convert into dataloaders (for model training)
-train_dataloader = torch.utils.data.DataLoader(
-	ml.StockNetDataset(
-		torch.from_numpy(X_train),
-		torch.from_numpy(y_train)
-	),
-
-	batch_size=config['BATCH_SIZE'],
-	shuffle=True
-)
-
-test_dataloader = torch.utils.data.DataLoader(
-	ml.StockNetDataset(
-		torch.from_numpy(X_test),
-		torch.from_numpy(y_test)
-	),
-	batch_size=config['BATCH_SIZE'],
-	shuffle=True
-)
+# Create training and testing dataloaders
+train_dataloader, test_dataloader = stock_data_manager.train_test_split(config['LSTM_WINDOW_SIZE'], config['BATCH_SIZE'])
 
 # Create variables for some config values
 best_training_loss = config['BEST_TRAINING_LOSS']
@@ -138,22 +80,27 @@ try:
 		# Disable gradient computation and reduce memory consumption.
 		with torch.no_grad():
 			vloss = 0
+			total = 0
 
 			for vinputs, vmoves in iter(test_dataloader):
 				
 				# Assign only the current batch to our device to save on memory
 				vinputs, vmoves = vinputs.to(device), vmoves.to(device)
 
+				# Get outputs
 				voutputs = model(vinputs)
 
-				vloss += loss_func(voutputs, vmoves)
+				# Compute loss based on the current batch (more accurate)
+				batch_loss = loss_func(voutputs, vmoves).item()
+				vloss += batch_loss * len(vinputs)
+				total += len(vinputs)
 
 			# Average validation loss over all epochs
-			avg_loss = vloss / len(test_dataloader)
+			avg_loss = vloss / total
 
 			# Track best performance
-			if avg_loss.item() < best_training_loss:
-				best_training_loss = avg_loss.item()
+			if avg_loss < best_training_loss:
+				best_training_loss = avg_loss
 
 				# Save the model's state if its loss execeeds the lowest recorded loss in config
 				torch.save(model.state_dict(), f'StockNet/model')
@@ -161,7 +108,7 @@ try:
 				# Save the optimizer's state as well
 				torch.save(optimizer.state_dict(), 'StockNet/optimizer')
 
-		#print(f'EPOCH [{epoch}/{config['EPOCHS']}] * Avg. Loss: {"{:.2f}".format(avg_loss.item())} * Best Loss: {"{:.2f}".format(best_training_loss)}\t')
+		#print(f'EPOCH [{epoch}/{config['EPOCHS']}] * Avg. Loss: {"{:.2f}".format(avg_loss)} * Best Loss: {"{:.2f}".format(best_training_loss)}\t')
 except KeyboardInterrupt:
 	pass
 finally:
@@ -172,10 +119,7 @@ finally:
 	with open('config.json','w') as f:
 		# Save best training loss to config file
 		try:
-			if best_training_loss > 0.1e-5:
-				config['BEST_TRAINING_LOSS'] = best_training_loss
-			else:
-				config['BEST_TRAINING_LOSS'] = 0.00001
+			config['BEST_TRAINING_LOSS'] = best_training_loss
 		except Exception as e:
 			print('Error while saving data - ', str(type(e)))
 

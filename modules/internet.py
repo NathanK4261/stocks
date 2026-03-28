@@ -5,12 +5,12 @@ from pandas import DataFrame
 import pandas_market_calendars as mcal
 
 import yfinance as yf
-from yfinance.exceptions import YFRateLimitError
+import yfinance.exceptions
 
-from datetime import date
+import datetime
 
 from . import valuations
-from .errors import error_message
+from . import errors
 
 def market_open():
 	'''
@@ -18,60 +18,74 @@ def market_open():
 
 	Does NOT tell you if market is open at the current time, just if the market was open on the current day
 	'''
-	# Get current date
-	day = str(date.today())
+	
+	try:
+		# Get current date
+		day = str(datetime.date.today())
 
-	# Get the NYSE calendar from the current day
-	result = mcal.get_calendar("NYSE").schedule(start_date=day, end_date=day)
+		# Get the NYSE calendar from the current day
+		result = mcal.get_calendar("NYSE").schedule(start_date=day, end_date=day)
+
+	except Exception as e:
+		raise errors.error('internet.py', 'Error while checking if market is open', e)
 
 	# If the calendar is not empty, the market is/was open on the current day
 	return result.empty == False
 
-class YahooClient:
+class YahooStockClient:
 	'''
-	# YahooClient
+	# YahooStockClient
 	Uses the `yfinance` library to get market data for a stock trading AI
 	'''
-	def current(self, ticker: str, set_date = str(date.today())):
+
+	def current(self, ticker: str, set_date = datetime.date.today()):
 		'''
 		Returns daily valuation metrics of a stock
+		
+		:param self:
+		:param ticker: The ticker symbol of the company
+		:type ticker: str
+		:param set_date: Defaults to the current date, can be manually set if needed
+		:type set_date: date
 		'''
-		# Create a `yfinance.Ticker` object for the desired company
-		yf_ticker = yf.Ticker(ticker)
 
 		# Get info about the company
 		try:
-			info = yf_ticker.info
+			info = yf.Ticker(ticker).info
+
+		except yfinance.exceptions.YFRateLimitError:
+			raise errors.error('internet.py', 'Rate limiting implemented, try again', e)
 
 		except Exception as e:
-			return error_message('internet.py', 'Could not pull data', e)
-		
-		except YFRateLimitError:
-			return error_message('internet.py', 'Rate limiting implemented, try again', e)
+			raise errors.error('internet.py', 'Could not pull data', e)
 
 		# Combine valuation metrics into a single dict
-		# Use `info.get(_, None)` so that if there is no data metric for a specific ticker, it defaults to "None"
 		data = {}
 		data['ticker'] = ticker
-		data['date'] = set_date
+		data['date'] = str(set_date)
 
-		for value in valuations.yf_values:
+		for value, _ in valuations.yf_values:
+
+			# Ignore keys that are not a part of the yfinance API data
+			if value in ['ticker','date','id']:
+				continue
 
 			try:
-				data[value] = info.get(value, None)
+				# Use `info.get(value, None)` so that if there is no data metric 
+				# for a specific ticker, it defaults to "None"
+				data[value] = [info.get(value, None)]
 
 			except Exception as e:
 				# Key error will usually mean the user did not enter the ticker/value name corectly
-				return error_message('internet.py', 'Unable to create price DataFrame', e)
+				raise errors.error('internet.py', 'Unable to create price dict', e)
+			
+		try:
+			data_df = DataFrame(data, index=None)
+		except Exception as e:
+			raise errors.error('internet.py', 'Unable to create price DataFrame', e)
 
-		return data
+		return data_df
 
-class NewsWebScraper:
-	'''
-	# NewsWebScaper
-
-	Class used to get the content of news webpages provided by `yfinance`
-	'''
 	def scrape_from_yf(self, ticker: str):
 		'''
 		Scrapes websites provided by `yfinance` and returns a list of 
@@ -83,10 +97,10 @@ class NewsWebScraper:
 			yf_news = yf.Search(ticker, news_count=3).news
 
 		except Exception as e:
-			return error_message('internet.py', 'Could not pull news data', e)
+			raise errors.error('internet.py', 'Could not pull news data', e)
 
-		except YFRateLimitError:
-			return error_message('internet.py', 'Rate limiting implemented, try again', e)
+		except yfinance.exceptions.YFRateLimitError:
+			raise errors.error('internet.py', 'Rate limiting implemented, try again', e)
 
 		# Make a list to store each scraped site
 		scraped_sites = []
@@ -101,7 +115,7 @@ class NewsWebScraper:
 			news_data = DataFrame.from_dict(yf_news)[['title','publisher','providerPublishTime','link']]
 		
 		except Exception as e:
-			return error_message('internet.py', f'Could not create DataFrame for {ticker} from news source', e)
+			raise errors.error('internet.py', f'Could not create DataFrame for {ticker} from news source', e)
 
 		# Get the html content of each webpage
 		for i in range(len(news_data)):
@@ -137,18 +151,18 @@ class NewsWebScraper:
 				# If the data scraped from the site is not empty, create a
 				# "NewsWebPage" object and store the site information
 				if len(news_content) != 0 or news_content is not None:
+					
 					scraped_sites.append(
 						NewsWebPage(
 							ticker,
 							news_data['title'][i],
 							news_content,
-							news_data['link'][i]
 						)
 					)
 
 		# Return the scraped sites only if there are enough "NewsWabPage" objects
 		if len(scraped_sites) == 0:
-			return error_message('internet.py', 'Could not pull sufficient news data', e)
+			raise errors.error('internet.py', 'Could not pull sufficient news data', e)
 		
 		return scraped_sites
 
@@ -158,16 +172,12 @@ class NewsWebPage:
 
 		Class used to store data about different news web pages
 
-		NOTE: This class is used in `NewsWebScraper`, so there is no need to 
+		**NOTE:** This class is used in `NewsWebScraper`, so there is no need to 
 		contruct objects using this class manually
 		'''
-		def __init__(self, ticker: str, title: str, content: str, link: str, date_scraped = date.today()):
+		def __init__(self, ticker: str, title: str, content: str):
 			self.ticker = ticker # The company ticker that the web page is talking about
 
 			self.title = title # Title of the news article
 
-			self.date_scraped = date_scraped # The date in which the news article was scraped
-
 			self.content = content # The content in the news article
-
-			self.link = link

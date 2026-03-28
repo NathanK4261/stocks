@@ -1,5 +1,4 @@
 '''
-# tickers
 A list containing the ticker symbols of every stock in the S&P 500
 
 Yes, it does update the list every time...
